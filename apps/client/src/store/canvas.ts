@@ -1,0 +1,36 @@
+import { create } from 'zustand'
+
+interface CanvasState {
+  panX: number
+  panY: number
+  zoom: number
+  setPan: (x: number, y: number) => void
+  setZoom: (zoom: number, originX?: number, originY?: number) => void
+  resetViewport: () => void
+  loadViewport: (v: { panX: number; panY: number; zoom: number }) => void
+}
+
+const MIN_ZOOM = 0.25
+const MAX_ZOOM = 4.0
+
+export const useCanvasStore = create<CanvasState>((set, get) => ({
+  panX: 0,
+  panY: 0,
+  zoom: 1,
+
+  setPan: (x, y) => set({ panX: x, panY: y }),
+
+  setZoom: (zoom, originX = 0, originY = 0) => {
+    const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
+    const { panX, panY, zoom: oldZoom } = get()
+    // zoom toward the origin point
+    const scale = clamped / oldZoom
+    const newPanX = originX - scale * (originX - panX)
+    const newPanY = originY - scale * (originY - panY)
+    set({ zoom: clamped, panX: newPanX, panY: newPanY })
+  },
+
+  resetViewport: () => set({ panX: 0, panY: 0, zoom: 1 }),
+
+  loadViewport: (v) => set({ panX: v.panX, panY: v.panY, zoom: v.zoom }),
+}))

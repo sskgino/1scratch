@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #f5f1e8;
+  --color-paper-deep: #ede7d7;
+  --color-ink: #1a1814;
+  --color-ink-soft: #4a4439;
+  --color-rule: #2d2a23;
+  --color-accent: #c2410c;
+  --color-grid: #d4cfc1;
+  --font-display: var(--font-fraunces);
+  --font-prose: var(--font-newsreader);
+  --font-mono: var(--font-jetbrains);
+}
+
+:root {
+  color-scheme: light;
+  --paper: #f5f1e8;
+  --paper-deep: #ede7d7;
+  --ink: #1a1814;
+  --ink-soft: #4a4439;
+  --rule: #2d2a23;
+  --accent: #c2410c;
+  --grid: #d4cfc1;
+}
+
+html, body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-newsreader), Georgia, "Times New Roman", serif;
+  font-feature-settings: "liga", "kern", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Drafting-vellum dot grid — the page IS the canvas. */
+.canvas-grid {
+  background-image:
+    radial-gradient(circle at 1px 1px, var(--grid) 1px, transparent 0);
+  background-size: 24px 24px;
+  background-position: -12px -12px;
+}
+
+/* Subtle paper noise — adds tactility, prevents flat-screen feel. */
+.paper-grain {
+  position: relative;
+}
+.paper-grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Hairline draftsman's rule. */
+.rule {
+  height: 1px;
+  background: var(--rule);
+  transform-origin: left center;
+}
+
+/* Animated reveal — the rule "draws" left to right. */
+@keyframes draw-rule {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+.rule-draw {
+  animation: draw-rule 800ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes lift-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.lift-in { animation: lift-in 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.fade-in { animation: fade-in 900ms ease-out both; }
+
+/* Sample memo cards — pinned-to-board feel via subtle rotation + shadow. */
+.memo {
+  background: #fbf8f0;
+  border: 1px solid var(--rule);
+  box-shadow:
+    0 1px 0 rgba(45, 42, 35, 0.06),
+    0 12px 28px -16px rgba(45, 42, 35, 0.25);
+  transition: transform 600ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              box-shadow 600ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
+}
+.memo:hover {
+  transform: translateY(-3px) rotate(0.2deg) !important;
+  box-shadow:
+    0 1px 0 rgba(45, 42, 35, 0.06),
+    0 24px 40px -18px rgba(45, 42, 35, 0.32);
+}
+
+/* Accent stamp — like a wax seal or draftsman's chop. */
+.stamp {
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 3px 6px;
+  display: inline-block;
+}
+
+/* Marginalia label — rotated technical caption. */
+.marginalia {
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
