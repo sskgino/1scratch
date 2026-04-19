@@ -37,7 +37,7 @@ export async function fetchSince(
 
   const more = rows.length > limit
   const page = more ? rows.slice(0, limit) : rows
-  const serverVersion = page.length > 0 ? page[page.length - 1].server_version : since
+  const serverVersion = page.length > 0 ? page[page.length - 1]!.server_version : since
 
   return {
     mutations: page.map((r) => ({

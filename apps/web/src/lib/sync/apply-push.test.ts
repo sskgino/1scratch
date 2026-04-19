@@ -80,7 +80,7 @@ d('applyPush', () => {
     const [rows] = await adminSql.transaction([
       adminSql`SELECT count(*)::int AS n FROM cards WHERE user_id = ${userA} AND id = ${cardId}`,
     ])
-    expect(rows[0].n).toBe(1)
+    expect(rows![0]!.n).toBe(1)
   })
 
   it('is idempotent on duplicate client_mutation_id', async () => {
@@ -111,7 +111,7 @@ d('applyPush', () => {
       adminSql`SELECT count(*)::int AS n FROM mutations
                WHERE user_id = ${userA} AND client_mutation_id = 'dup-1'`,
     ])
-    expect(rows[0].n).toBe(1)
+    expect(rows![0]!.n).toBe(1)
   })
 
   // Row version is the server-assigned HLC (nextHlc()), not the client version.
@@ -157,7 +157,7 @@ d('applyPush', () => {
     const [rows] = await adminSql.transaction([
       adminSql`SELECT name FROM canvases WHERE id = ${canvasId}`,
     ])
-    expect(rows[0].name).toBe('NEW')
+    expect(rows![0]!.name).toBe('NEW')
   })
 
   it('rejects patches larger than 64KB with reason=invalid', async () => {
