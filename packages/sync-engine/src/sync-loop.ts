@@ -1,6 +1,5 @@
 import type { PushRequest, PushResponse, PullResponse, Mutation } from '@1scratch/sync-proto'
 import type { Store } from './store'
-import type { HttpClientError } from './http-client'
 import { Reconciler } from './reconciler'
 
 export interface SyncLoopOptions {
@@ -16,7 +15,6 @@ const MAX_BACKOFF_MS = 60_000
 const BATCH_SIZE = 100
 
 export class SyncLoop {
-  private running = false
   private pushInFlight: Promise<void> | null = null
   private pullInFlight: Promise<void> | null = null
   private pollTimer: ReturnType<typeof setInterval> | null = null
@@ -32,12 +30,10 @@ export class SyncLoop {
   }
 
   start(): void {
-    this.running = true
     this.pollTimer = setInterval(() => { void this.triggerNow() }, this.opts.pollIntervalMs)
   }
 
   stop(): void {
-    this.running = false
     if (this.pollTimer) clearInterval(this.pollTimer)
     this.pollTimer = null
   }
