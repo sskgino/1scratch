@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSettingsStore, FONTS, DEFAULT_MODEL_SLOTS } from '../../store/settings'
 import { useWorkspaceStore } from '../../store/workspace'
+import { SyncDiagnostics } from '../SyncDiagnostics'
 
 interface Props {
   onClose: () => void
@@ -153,6 +154,8 @@ export default function SettingsPanel({ onClose }: Props) {
             Reset to defaults
           </button>
         </Section>
+
+        <SyncDiagnostics />
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
           <button onClick={onClose} style={{ ...btnStyle, background: 'rgba(0,0,0,0.05)', color: '#333' }}>Cancel</button>
