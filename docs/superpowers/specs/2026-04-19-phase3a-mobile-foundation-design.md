@@ -66,7 +66,7 @@ packages/
 **Extraction PR mechanics (single PR, two commits max):**
 
 1. `pnpm -w tsc -b` baseline green.
-2. Commit 1 — package skeleton: create `packages/ui/{package.json,tsconfig.json,src/index.ts}`, `packages/tauri-plugin-secure-store/{Cargo.toml,src/lib.rs}`, register in `pnpm-workspace.yaml`.
+2. Commit 1 — package skeleton: create `packages/ui/{package.json,tsconfig.json,src/index.ts}`, `packages/tauri-plugin-secure-store/{Cargo.toml,src/lib.rs}`. (`pnpm-workspace.yaml` already has `packages/*` glob — no edit needed.)
 3. Commit 2 — relocate + rewrite imports:
    - `git mv apps/client/src/{components,lib,store} packages/ui/src/`
    - `apps/client/src/main.tsx`, `App.tsx`, `sync/*.ts` updated import paths to `@1scratch/ui/*`.
@@ -135,6 +135,8 @@ pub fn run() {
   }
 }
 ```
+
+The exact key shape for `plugins.deep-link` should be verified against the installed `tauri-plugin-deep-link@2` schema during the implementation plan write-up — Tauri 2 plugin config layouts have shifted across minor releases. Adjust to current schema if it differs; the *intent* (custom scheme `1scratch://` + Android App Links host `app.1scratch.ai`) is locked.
 
 **`capabilities/mobile.json` (NEW):**
 
@@ -219,9 +221,24 @@ Apply via Neon MCP `run_sql_transaction` with leading `SET ROLE neondb_owner` (p
 
 ### 4.5 Backend gate
 
-Add `verifyMobileBearer(req)` upstream of the existing Clerk-session resolver used by `/api/sync/push|pull`, `/api/ai/stream`, `/api/providers*`, `/api/model-slots*`, `/api/cap`, `/api/audit-events`, `/api/account/*` (NOT cron, NOT `/api/webhooks/*`). If `Authorization: Bearer eyJ…` and HS256 signature verifies against `MOBILE_JWT_SIGNING_KEY`, set `userId = sub`. Existing `withRls(userId, …)` works unchanged. Falls through to Clerk's `auth()` if no bearer.
+Add `verifyMobileBearer(req)` upstream of the existing Clerk-session resolver used by these protected routes:
+
+- `/api/sync/push`, `/api/sync/pull`
+- `/api/ai/stream`
+- `/api/providers`, `/api/providers/[id]`, `/api/providers/[id]/verify`
+- `/api/model-slots`, `/api/model-slots/[slot]`
+- `/api/cap`
+- `/api/audit-events`
+- `/api/account/delete-request`, `/api/account/delete-cancel`
+- `/api/import/scratch`
+
+**NOT gated** (intentionally public per existing Phase 2 design): `/api/account/delete-confirm` (token in URL is the proof), `/api/webhooks/*` (Svix-verified), `/api/cron/*` (CRON_SECRET-gated). `/oauth/*` keeps current Clerk session handling.
+
+If `Authorization: Bearer eyJ…` is present and the HS256 signature verifies against `MOBILE_JWT_SIGNING_KEY`, set `userId = sub`. Existing `withRls(userId, …)` works unchanged. Falls through to Clerk's `auth()` if no bearer.
 
 ### 4.6 Client flow (`packages/ui/src/auth/session.ts`)
+
+`apiBase` and `webBase` resolve from the existing `apiBaseUrl()` helper in `apps/client/src/sync/auth-token.ts` (extends to `webBaseUrl()` reading `VITE_WEB_BASE_URL`, defaulting to `https://app.1scratch.ai`).
 
 ```ts
 // Pseudocode shape — exact API per implementation plan.
