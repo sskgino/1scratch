@@ -2,7 +2,7 @@
 // Each upsert uses WHERE clause "incoming.version > current.version" so LWW
 // is enforced at the DB layer.
 
-import type { NeonQueryFunction, NeonQueryPromise } from '@neondatabase/serverless'
+import type { NeonQueryPromise } from '@neondatabase/serverless'
 import { sqlUser } from '@/db/rls'
 
 type UpsertArgs = {
