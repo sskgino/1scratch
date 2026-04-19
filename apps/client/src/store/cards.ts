@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { nanoid } from 'nanoid'
 
 export interface BaseCard {
   id: string
@@ -39,7 +38,7 @@ export const useCardsStore = create<CardsState>((set, get) => ({
   maxZIndex: 0,
 
   addCard: (cardData) => {
-    const id = nanoid()
+    const id = crypto.randomUUID()
     const { maxZIndex } = get()
     const newZ = maxZIndex + 1
     const card: Card = { ...cardData, id, createdAt: Date.now(), zIndex: newZ }
