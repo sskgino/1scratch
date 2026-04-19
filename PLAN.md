@@ -687,6 +687,34 @@ Items that are known-needed but blocked on something external (plan upgrade, app
 
 Running ledger of in-flight changes to the plan as we actually build. Each entry: date, section affected, what changed, why. Append newest at the top. When an amendment supersedes an original plan decision, note the old assumption so future-us doesn't get confused re-reading the earlier sections.
 
+## 2026-04-18 (later) — Phase 2 step 2: sync v1 (desktop)
+
+Scoped pass: PLAN §10 Phase 2 step 2. Design: `docs/superpowers/specs/2026-04-18-sync-v1-design.md`; plan: `docs/superpowers/plans/2026-04-18-sync-v1.md`.
+
+**Shipped:**
+- `apps/web/src/lib/sync/apply-push.ts` + `fetch-since.ts` + zod validators; idempotent via existing `(user_id, client_mutation_id)` unique index; server HLC extended with `observeRemoteHlc`.
+- `POST /api/sync/push` + `GET /api/sync/pull` route handlers (Clerk-authed, RLS-wrapped).
+- `packages/sync-engine` — pure TS: HLC re-export, `Store` interface, `DirtyTracker` (500ms debounce, streaming-response suppression), `Outbox`, `Reconciler` (echo filter + LWW), `HttpClient`, `SyncLoop`.
+- `apps/client/src/sync/*` — `TauriSqliteStore` (`@tauri-apps/plugin-sql`), local schema, `hydrate`, `migrate-zustand` one-shot, `SyncProvider` context. Client entity ids switched from nanoid → `crypto.randomUUID()`; Zustand `persist` dropped (SQLite is source of truth).
+- Sync Diagnostics panel in Settings (outbox depth, last error, manual sync).
+
+**Design decisions locked (from brainstorming 2026-04-18):** see `docs/superpowers/specs/2026-04-18-sync-v1-design.md` §Locked design decisions. Notable:
+- Final-mutation-only streaming persistence.
+- Storage-agnostic `Store` seam (Tauri SQLite v1; mobile reuses Phase 3; IndexedDB deferred until web canvas exists).
+- No single-active-device enforcement; LWW handles concurrent writes.
+- No new migration required — `mutations.client_mutation_id` + idempotency index already in schema from Phase 1.
+
+**Deferred from this scope:**
+- Desktop Clerk session integration for `getAuthToken()` — currently reads `VITE_DEV_CLERK_TOKEN`; proper desktop auth coordinates with Phase 2 step 1 client swap on the Tauri side (web workbench already migrated).
+- `deleted_at` on `canvases`/`sections` (hard-delete in v1); revisit with Phase 4 CRDT swap.
+- WebSocket / SSE push-from-server (PLAN §4 notes Phase 2 item; single-active-device makes polling sufficient).
+- Manual QA checklist (Task 21 step 1) — left to user (requires running Tauri app + Neon DB inspection).
+
+**Plan deviations:**
+- Task 2 LWW test: plan asserted older `clientVersion` loses, but server stores `serverVersion = nextHlc()` not `clientVersion`. Rewrote test to admin-bump `canvases.version` to bigint max simulating concurrent server instance (chosen with user as option b).
+- Task 12 SyncLoop concurrency-guard test: plan's verbatim sync `expect(pushSpy).toHaveBeenCalledTimes(1)` runs before the awaited `peekOutbox` resolves. Wrapped in `vi.waitFor(...)` (one-line test-only deviation; production code is plan-verbatim).
+- Task 15-19: minor type-safety fixups (removed unused imports, prefixed unused params with `void`, added `!` for `noUncheckedIndexedAccess`) where plan-verbatim code didn't satisfy strict tsconfig.
+
 ## 2026-04-18 (later) — Phase 2 steps 7, 9, 10: import, deletion, audit log
 
 Scoped pass: picked the three leftover **unblocked** Phase 2 steps (step 5 sync-protocol still gated on `/brainstorming`; step 8 Paddle gated on live-seller approval).
