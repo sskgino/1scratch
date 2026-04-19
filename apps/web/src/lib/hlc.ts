@@ -15,3 +15,17 @@ export function nextHlc(): bigint {
   }
   return (BigInt(now) << 16n) | BigInt(counter)
 }
+
+// Advance local HLC to be strictly greater than `remote`. Called on each
+// incoming client mutation so a client with a skewed-forward clock can't
+// produce a version the server hasn't caught up to.
+export function observeRemoteHlc(remote: bigint): void {
+  const remoteTs = Number(remote >> 16n)
+  if (remoteTs > lastTs) {
+    lastTs = remoteTs
+    counter = Number(remote & 0xffffn)
+  } else if (remoteTs === lastTs) {
+    const rCounter = Number(remote & 0xffffn)
+    if (rCounter > counter) counter = rCounter
+  }
+}
