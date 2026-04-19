@@ -241,6 +241,49 @@ export const aiUsage = pgTable(
   (t) => [index('ai_usage_user_date_idx').on(t.userId, t.usageDate)],
 )
 
+// ─── Auth audit log (PLAN.md §2 threat model) ───────────────────────────────
+
+// Append-only. Users can read their own rows; see migrations/0002 for RLS.
+// kind is an open string; known values live in src/lib/audit-events.ts so
+// we can add new event types without a schema change.
+export const authEvents = pgTable(
+  'auth_events',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    // Neon driver returns inet as text; store/read as string.
+    ip: text('ip'),
+    ua: text('ua'),
+    meta: jsonb('meta').notNull().default({}),
+    ts: timestamp('ts', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('auth_events_user_ts_idx').on(t.userId, t.ts)],
+)
+
+// ─── Account deletion (24-hr cool-off; PLAN.md §5) ──────────────────────────
+
+// One active request per user enforced by a partial unique index in SQL.
+// confirm_token_hash = sha256(plaintext token); plaintext is emailed once.
+export const accountDeletionRequests = pgTable(
+  'account_deletion_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    confirmTokenHash: text('confirm_token_hash').notNull(),
+    status: text('status').notNull().default('pending'),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    executesAfter: timestamp('executes_after', { withTimezone: true }).notNull(),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    executedAt: timestamp('executed_at', { withTimezone: true }),
+  },
+)
+
 // ─── Billing events (Paddle webhook log) ────────────────────────────────────
 
 // Idempotency key is Paddle's event_id; the webhook is at-least-once.

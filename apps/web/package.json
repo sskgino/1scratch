@@ -11,23 +11,33 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run tests/integration"
   },
   "dependencies": {
     "@1scratch/sync-proto": "workspace:*",
     "@1scratch/types": "workspace:*",
     "@ai-sdk/anthropic": "^2.0.0",
+    "@ai-sdk/google": "^3.0.64",
     "@ai-sdk/openai": "^2.0.0",
+    "@ai-sdk/openai-compatible": "^2.0.41",
     "@aws-sdk/client-kms": "^3.700.0",
     "@clerk/nextjs": "^7.0.0",
     "@neondatabase/serverless": "^1.0.0",
+    "@sentry/nextjs": "^10.49.0",
+    "@workflow/ai": "^4.1.2",
+    "@workflow/next": "^4.0.5",
     "ai": "^6.0.0",
+    "botid": "^1.5.11",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.36.0",
     "next": "^16.0.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "resend": "^4.0.0",
+    "workflow": "^4.2.4",
     "zod": "^3.23.0"
   },
   "devDependencies": {
@@ -36,10 +46,14 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vercel/config": "^0.2.0",
+    "@vitest/ui": "^4.1.4",
+    "@workflow/vitest": "^4.0.5",
     "drizzle-kit": "^0.28.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.0.0",
     "tailwindcss": "^4.2.2",
-    "typescript": "^5.7.2"
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.4"
   }
 }

@@ -7,17 +7,44 @@ Also sets up AWS KMS (per PLAN.md §12 locked decision). All services are pay-as
 
 ---
 
-## 0. Prereqs
+## Status (updated 2026-04-17)
 
-- [ ] Vercel account exists, logged into [vercel.com/dashboard](https://vercel.com/dashboard) under an org owned by **1Scratch LLC** (not a personal account — billing + team seats live here).
-- [ ] Upgrade CLI: `pnpm add -g vercel@latest` (current installed is 50.42.0; 51.5.x is needed for `vercel env pull` with linked Marketplace vars).
-- [ ] `vercel login` — opens browser.
-- [ ] Domain `1scratch.ai` is owned and nameservers point at Vercel (or ready to, after Step 1).
-- [ ] A transactional mailbox exists at `support@1scratch.ai` with SPF/DKIM/DMARC configured. (See Step 4 — Resend can own the DKIM/SPF records directly if this mailbox is new.)
+| Step | Service | Status |
+|---|---|---|
+| 0 | Prereqs | ✅ Done |
+| 1 | Vercel project + Git + domains + first deploy | ✅ Done |
+| 2 | Neon Postgres + roles + `DATABASE_URL_ADMIN` | ✅ Done (see deviation below) |
+| 3 | Clerk | 🟡 Marketplace env vars + sign-in/up URL vars set; dashboard config for sessions + JWT template + allowed origins completed in-session; **Resend email delivery via `emails.created` webhook pending** (Clerk deprecated dashboard Custom SMTP — new pattern); webhook handler deferred to Phase 1 final sub-step |
+| 4 | Resend | ✅ Done (manual path — Marketplace integration failed with auth error) |
+| 5 | AI Gateway | ✅ Done (ZDR deferred — Hobby plan; see PLAN.md TODO) |
+| 6 | AWS KMS | ✅ Done (seal/open round-trip verified; EncryptionContext binding enforced) |
+| 7 | Paddle (sandbox) | 🟡 Signed up, product + price + webhook created; API key verified. Dev env set; **Preview scope pending dashboard**; **Production waits on live Paddle approval + live API key** (Phase 2 exit). |
+| 8 | Sentry | ✅ Done (org + 2 projects, DSNs captured, env vars set Dev + Preview + Prod via CLI + dashboard; `@sentry/nextjs` install deferred to Phase 1 final sub-step per original plan) |
+| 9 | Axiom | ✅ Done (Marketplace integration added; `NEXT_PUBLIC_AXIOM_INGEST_ENDPOINT` set all 3 envs; dataset = `vercel` default; retention confirmed in Axiom) |
+
+### Deviations from original plan
+
+- **Step 2 / `DATABASE_URL_ADMIN`:** Doc says "mint a role via the Neon dashboard." Neon's SQL Editor and dashboard both run every session under `SET ROLE app_user` (the default applied to `neondb_owner`), which silently blocked `CREATE ROLE` and `ALTER ROLE`. Fixed by running the role setup from a Node script that explicitly executes `SET ROLE neondb_owner` first within a single transaction. Result: `admin_user` exists with LOGIN + password, has `GRANT app_admin`, and `ALTER ROLE admin_user SET ROLE app_admin` makes it default to the BYPASSRLS role. **Gotcha:** `BYPASSRLS` is a role *attribute*, not a privilege — it does **not** inherit through group membership. The `SET ROLE app_admin` default is what makes BYPASSRLS effectively apply for `admin_user` sessions.
+- **Step 4 / Resend:** Vercel Marketplace integration flow errored with *"The user does not have an active session or is not authenticated"*. Bypassed by signing up at resend.com directly, verifying `1scratch.ai` via Cloudflare DNS, creating the API key manually, and adding `RESEND_API_KEY` (Sensitive for Prod+Preview, non-Sensitive for Dev — Vercel rejects Sensitive-scope on Development).
+- **CLI quirk noted (applies to all remaining manual env vars):** `vercel env add NAME preview` returns a "choose branch" JSON guidance even when given `--value ... --yes`. Workaround: add Preview scope via the Vercel dashboard (check both Production and Preview boxes when editing).
+- **CLI quirk — trailing newline from `echo`:** `echo "value" | vercel env add …` pipes a trailing `\n` that Vercel stores as part of the value. Caught after AWS SDK rejected `region="us-east-1\n"`. **Always use `printf '%s' "value" | vercel env add …`** (no trailing newline). All previously-added `AI_GATEWAY_API_KEY` and `AWS_*` values were removed and re-added cleanly with `printf`.
+- **Step 3 / Clerk Custom SMTP removed:** Plan originally said "Clerk dashboard → Emails → Custom SMTP → point at Resend." As of 2026 Clerk **no longer exposes SMTP credential fields in the dashboard**. New pattern: toggle "Delivered by Clerk" OFF per email template → Clerk emits `emails.created` webhook → our Next.js handler sends via Resend SDK. Webhook handler is implementation work, deferred to Phase 1 final sub-step (same bucket as `@sentry/nextjs` install). See Step 3 below for the exact plan.
+- **Step 3 / Clerk JWT template — `sub` claim reserved:** Original plan's template emitted `{ sub, email }`. Clerk blocks overriding `sub` (it's always auto-emitted with `user.id`). Template in dashboard emits `{ email }` only; middleware reads `sub` from Clerk's default claim set. Functionally identical.
+- **Step 10 / health route required a real DB call:** Doc originally expected `/api/health` to return a "live DB timestamp." The scaffolded handler at `apps/web/src/app/api/health/route.ts` only returned `new Date().toISOString()`. Updated to `select now() as db_time` via the `@neondatabase/serverless` tagged-template client (direct neon, not drizzle — the drizzle `neon-http` `db.execute(sql...)` path threw `"This function can now be called only as a tagged-template function"` in drizzle-orm 0.36). This verifies end-to-end DB reachability from Dev env.
 
 ---
 
-## 1. Vercel — create & link the project
+## 0. Prereqs ✅
+
+- [x] Vercel account exists, logged into [vercel.com/dashboard](https://vercel.com/dashboard) under an org owned by **1Scratch LLC** (team: `1-scratch-llc`).
+- [x] Vercel CLI at 51.6.1.
+- [x] `vercel login` — signed in as `sskgino-8710`.
+- [x] Domain `1scratch.ai` owned; DNS hosted at Cloudflare.
+- [x] Transactional mailbox `support@1scratch.ai` works. SPF/DKIM/DMARC now owned by Resend (Step 4).
+
+---
+
+## 1. Vercel — create & link the project ✅
 
 ```bash
 cd /home/gino/programming/dev/scratch
@@ -27,24 +54,24 @@ vercel pull             # creates .vercel/ and pulls any existing env vars
 
 After link, in the Vercel dashboard for the project:
 
-- [ ] Settings → Build & Development → Root Directory = `apps/web`
-- [ ] Settings → Build & Development → Framework Preset = Next.js (auto)
-- [ ] Settings → Git → connect to the `1Scratch/scratch` repo (create the GitHub repo first if not already).
-- [ ] Settings → Domains → add `app.1scratch.ai` and `api.1scratch.ai` (the latter is aliased to the same deployment; routing is handled by the Next.js app itself).
-- [ ] Settings → General → Node.js Version = 24.x
+- [x] Settings → Build & Development → Root Directory = `apps/web`
+- [x] Settings → Build & Development → Framework Preset = Next.js (auto)
+- [x] Settings → Git → connected to `sskgino/1scratch` (local uses SSH remote `git@github.com:sskgino/1scratch.git`).
+- [x] Settings → Domains → `app.1scratch.ai` and `api.1scratch.ai` added.
+- [x] Settings → General → Node.js Version = 24.x
 
-**Verify:** `vercel env ls` returns the Vercel-managed defaults (e.g. `VERCEL_URL`).
+**First deploy (green):** `https://1scratch-enjiu3udf-1-scratch-llc.vercel.app` — 33s build from initial commit.
 
 ---
 
-## 2. Neon Postgres — via Vercel Marketplace
+## 2. Neon Postgres — via Vercel Marketplace ✅
 
 Vercel Marketplace auto-injects `DATABASE_URL` plus pooled/direct variants into the linked project, across all envs.
 
-- [ ] Dashboard → Storage → Marketplace → Neon → **Create**.
-- [ ] Project name: `1scratch-db`. Region: **AWS us-east-1**.
-- [ ] After creation: Neon dashboard → **Branching** enabled by default (preview envs get their own branch). Confirm.
-- [ ] Neon dashboard → Settings → **Compute scaling** → Scale plan (we'll be on Launch for Phase 1, upgrade to Scale in Phase 4 when EU replica is added).
+- [x] Dashboard → Storage → Marketplace → Neon → **Create**.
+- [x] Project name: `1scratch-db`. Region: **AWS us-east-1**.
+- [x] Branching enabled.
+- [x] Launch plan active.
 - [ ] Plan item deferred to Phase 4: EU read replica (add a second region under the same project in Neon).
 
 **Env vars auto-injected** (do NOT set manually):
@@ -65,161 +92,221 @@ pnpm db:migrate         # applies 0000_initial_schema + 0001_rls
 
 **Verify:** `pnpm db:studio` opens Drizzle Studio, shows all tables from §3 with RLS enabled.
 
-**Post-migration DB setup (one-time, via SQL console in Neon dashboard):**
+**Post-migration DB setup (done):**
 
 ```sql
--- Grant app role to the Vercel-provisioned user so request-path queries
--- run under RLS. Replace <neon_user> with the role name from DATABASE_URL.
-GRANT app_user TO <neon_user>;
-ALTER ROLE <neon_user> SET ROLE app_user;   -- default to non-privileged
+-- Applied to neondb_owner (the Vercel-provisioned login role)
+GRANT app_user TO neondb_owner;
+ALTER ROLE neondb_owner SET ROLE app_user;  -- default to non-privileged
 ```
 
-Create a separate privileged connection string for webhooks (Paddle, Clerk) — use the Neon dashboard to mint a role that inherits `app_admin` (BYPASSRLS) and store as `DATABASE_URL_ADMIN` in Vercel env (scope: Production + Preview only).
+**Privileged login role for webhooks/migrations (done, via Node script not Neon dashboard):**
+
+```sql
+-- Ran with `SET ROLE neondb_owner` prefix inside a single transaction,
+-- because the SQL Editor session starts as app_user and silently blocks DDL.
+CREATE ROLE admin_user WITH LOGIN PASSWORD 'BossmanGino$$';
+GRANT app_admin TO admin_user;
+ALTER ROLE admin_user SET ROLE app_admin;   -- makes BYPASSRLS effectively apply
+```
+
+> **Gotcha:** `BYPASSRLS` is a role attribute, not a privilege — it doesn't inherit through `GRANT`. The `SET ROLE app_admin` default is what makes BYPASSRLS apply for `admin_user`'s sessions.
+
+`DATABASE_URL_ADMIN` stored in Vercel env (scope: **Production + Preview only**):
+
+```
+postgresql://admin_user:BossmanGino$$@ep-jolly-brook-a4tcj7ay-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+```
 
 ---
 
-## 3. Clerk — via Vercel Marketplace
+## 3. Clerk — via Vercel Marketplace 🟡
 
-- [ ] Dashboard → Integrations → Marketplace → Clerk → **Add Integration**.
-- [ ] New Clerk application: name `1Scratch`, enable: **Email/password, Email magic link, Google, Apple, GitHub**.
-- [ ] Clerk dashboard → Sessions → Access token lifetime = **15 min**; Refresh token lifetime = **30 days**, rotating on use.
-- [ ] Clerk dashboard → JWT Templates → create template `app_user` that emits `{ sub, email }` (used by Next.js middleware to derive `app.user_id`).
-- [ ] Clerk dashboard → Emails → Custom SMTP → point at Resend (after Step 4) so magic links ship from `support@1scratch.ai`.
-- [ ] Add allowed origins: `https://app.1scratch.ai`, `1scratch://` (desktop/mobile deep link).
+- [x] Dashboard → Integrations → Marketplace → Clerk → **Add Integration**.
+- [x] Clerk application name = `1Scratch`; enabled sign-ins: **Email/password, Email magic link, Google, Apple, GitHub**.
+- [x] Clerk dashboard → Sessions → Access token lifetime = **15 min (900s)**; Refresh token lifetime = **30 days** with rotation on use.
+- [x] Clerk dashboard → JWT Templates → template `app_user` created. **Deviation:** `sub` is a Clerk-reserved claim — cannot be overridden in a custom template. Template emits only `{ "email": "{{user.primary_email_address}}" }`. Middleware reads `sub = user.id` from Clerk's default claim set (always present).
+- [x] Allowed origins added: `https://app.1scratch.ai`, `1scratch://` (desktop/mobile deep link).
+- [ ] **Resend email delivery — pending, see sub-section below.**
 
-**Env vars auto-injected:**
+**Env vars auto-injected (confirmed present):**
 
-- `CLERK_SECRET_KEY`
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+- `CLERK_SECRET_KEY` ✅ (all envs)
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` ✅ (all envs)
 
-Set manually in Vercel env (all envs):
+**Env vars set manually via CLI:**
 
-- `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in`
-- `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up`
+- [x] `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in` — Dev ✅ · Prod ✅ · Preview ⏳ dashboard (same `git_branch_required` quirk)
+- [x] `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up` — Dev ✅ · Prod ✅ · Preview ⏳ dashboard
 
 **Verify:** `vercel dev` locally → visit `/sign-in` → Clerk hosted component renders.
 
+### 3a. Clerk → Resend email delivery (pending)
+
+Clerk deprecated dashboard Custom SMTP. New pattern per [Clerk docs](https://clerk.com/docs/guides/customizing-clerk/email-sms-templates):
+
+1. **Dashboard → Customization → Emails** → for each template (magic link / OTP / verification code / reset password / organization invitation) toggle **"Delivered by Clerk" OFF**.
+2. **Dashboard → Webhooks → Add endpoint**:
+   - URL: `https://app.1scratch.ai/api/webhooks/clerk`
+   - Subscribe to events: `email.created` (required for Resend delivery), plus `user.created` + `user.deleted` (needed for syncing Clerk user → Postgres `users` table — Phase 1 exit criterion).
+   - Copy the signing secret (format `whsec_...`).
+3. **Env var to add** (once secret captured):
+   - `CLERK_WEBHOOK_SECRET` = `whsec_...` — Prod (**Sensitive**) · Preview (**Sensitive**, via dashboard) · Dev (non-Sensitive).
+4. **Webhook handler** (`apps/web/src/app/api/webhooks/clerk/route.ts`) — **deferred to Phase 1 final sub-step** (same bucket as `@sentry/nextjs` install). Responsibilities:
+   - Verify Svix signature using `CLERK_WEBHOOK_SECRET` (via `svix` npm package).
+   - On `email.created`: extract `to_email_address`, `subject`, `body`, `from_email_name` from payload → `resend.emails.send({ from: 'support@1scratch.ai', to, subject, html: body })`.
+   - On `user.created`: upsert into Postgres `users` table (id = Clerk user ID).
+   - On `user.deleted`: trigger account cascade delete (§2 threat model GDPR erasure path).
+
 ---
 
-## 4. Resend — via Vercel Marketplace
+## 4. Resend — manual signup ✅ (Marketplace path failed)
 
-- [ ] Dashboard → Integrations → Marketplace → Resend → **Add Integration**.
-- [ ] Resend dashboard → Domains → add `1scratch.ai` → copy DNS records (SPF, DKIM, DMARC) → add to `1scratch.ai` DNS provider → wait for verify (~10 min).
-- [ ] Resend dashboard → API Keys → confirm the Vercel-injected key exists.
+Marketplace "Add Integration" returned *"The user does not have an active session or is not authenticated"* — root cause not diagnosed. Worked around by direct signup.
 
-**Env vars auto-injected:**
+- [x] Signed up at [resend.com](https://resend.com).
+- [x] Resend dashboard → Domains → `1scratch.ai` added → DNS records (SPF / DKIM-CNAME / DMARC) added in Cloudflare with **grey cloud (DNS only)** on CNAMEs → verified.
+- [x] API key `1scratch-server` created (full access, scoped to `1scratch.ai`).
 
-- `RESEND_API_KEY`
+**Env vars set manually in Vercel:**
 
-Set manually:
+- `RESEND_API_KEY` — Production (Sensitive), Preview (Sensitive), Development (non-Sensitive — Vercel rejects Sensitive on Development scope).
+- `RESEND_FROM_ADDRESS=support@1scratch.ai` — all envs.
 
-- `RESEND_FROM_ADDRESS=support@1scratch.ai` (all envs)
-
-**Verify:** `curl -X POST https://api.resend.com/emails -H "Authorization: Bearer $RESEND_API_KEY" -H "Content-Type: application/json" -d '{"from":"support@1scratch.ai","to":"sskgino@gmail.com","subject":"provisioning test","text":"hi"}'` → 200, message lands.
+**Verified:** test send to `sskgino@gmail.com` returned `id=b56b610a-7722-4553-a8b6-92b84f16ca4f` and was received.
 
 ---
 
-## 5. AI Gateway — Vercel native (no Marketplace step)
+## 5. AI Gateway — Vercel native (no Marketplace step) ✅
 
-- [ ] Dashboard → AI → AI Gateway → Enable for project.
-- [ ] AI Gateway dashboard → Keys → create key `1scratch-server` with scope = all providers.
-- [ ] AI Gateway dashboard → Settings → **Zero Data Retention** = enabled.
+- [x] Dashboard → AI → AI Gateway → Enable for project.
+- [x] AI Gateway dashboard → Keys → create key `1scratch-server` with scope = all providers. Key ID prefix `vck_2ax1PR…`.
+- [ ] AI Gateway dashboard → Settings → **Zero Data Retention** — **deferred: Hobby plan does not expose the toggle**. Tracked in PLAN.md TODO; must flip on before any real user traffic.
 
-**Env var to set manually:**
+**Env var `AI_GATEWAY_API_KEY`:**
 
-- `AI_GATEWAY_API_KEY=<key value>` (all envs)
+- [x] Production — added via CLI (`--sensitive`)
+- [x] Preview — added via dashboard (CLI quirk: `vercel env add NAME preview` returns `git_branch_required` even with `--value/--yes` — same workaround used for Resend)
+- [x] Development — added via CLI (non-sensitive)
 
-**Verify:**
+**Verified:** curl against `anthropic/claude-haiku-4.5` returned `pong 🏓` at $0.000053/call; routing resolved to `anthropic` provider with `bedrock` + `vertexAnthropic` fallbacks available.
 
 ```bash
 curl https://ai-gateway.vercel.sh/v1/chat/completions \
   -H "Authorization: Bearer $AI_GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"model":"anthropic/claude-haiku-4-5","messages":[{"role":"user","content":"ping"}]}'
+  -d '{"model":"anthropic/claude-haiku-4.5","messages":[{"role":"user","content":"ping"}]}'
 ```
 
-→ streams a response.
+> **Model slug format:** AI Gateway uses dotted versions (`claude-haiku-4.5`), not hyphens. The provider resolves to the dated snapshot `claude-haiku-4-5-20251001` internally.
 
 ---
 
-## 6. AWS KMS — for envelope encryption (PLAN.md §12)
+## 6. AWS KMS — for envelope encryption (PLAN.md §12) ✅
 
-Not on Vercel Marketplace; provision in AWS.
+Not on Vercel Marketplace; provisioned directly in AWS.
 
-- [ ] AWS Console → IAM → create user `vercel-kms-1scratch`, programmatic-only, no console access.
-- [ ] IAM → attach inline policy: `kms:GenerateDataKey`, `kms:Decrypt`, `kms:DescribeKey` — resource-scoped to the single KEK ARN below.
-- [ ] AWS KMS → Create key:
-  - Type: Symmetric, Usage: Encrypt/Decrypt
-  - Alias: `alias/1scratch-kek-prod`
-  - Key administrators: your root/admin user (**not** the Vercel IAM user)
+**Correct order** (the original doc listed these reversed — the IAM policy needs the KEK ARN, and KMS "Key users" needs the IAM user to already exist):
+
+- [x] AWS Console → **IAM** (not IAM Identity Center — that's the SSO product for human users) → Users → create `vercel-kms-1scratch`, programmatic-only, no console access, no policies yet. Generated an Access Key ID + Secret.
+- [x] AWS KMS (Region us-east-1) → Create key:
+  - Symmetric, Encrypt/Decrypt
+  - Alias: `1scratch-kek-prod` (stored as `alias/1scratch-kek-prod`)
+  - Key administrators: **left empty** — the default key policy's `arn:aws:iam::<acct>:root` statement grants full admin access to the account root, which is sufficient. Only add admins later if we create a dedicated admin IAM user.
   - Key users: `vercel-kms-1scratch`
-  - Region: `us-east-1`
-- [ ] (Later, before launch) create a second KEK in `eu-central-1` with alias `alias/1scratch-kek-eu`.
+  - **ARN:** `arn:aws:kms:us-east-1:784055307405:key/5e1e4f40-08ba-43b4-8a5b-7411045ff37a`
+- [x] IAM → `vercel-kms-1scratch` → Add inline policy `1scratch-kek-prod-use`, scoped to the KEK ARN above:
+  ```json
+  {
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Action": ["kms:GenerateDataKey", "kms:Decrypt", "kms:DescribeKey"],
+      "Resource": "arn:aws:kms:us-east-1:784055307405:key/5e1e4f40-08ba-43b4-8a5b-7411045ff37a"
+    }]
+  }
+  ```
+- [ ] **Deferred to Phase 4:** create a second KEK in `eu-central-1` with alias `1scratch-kek-eu` for EU data-residency routing.
 
-**Env vars to set manually in Vercel:**
+### Deviation
 
-- `AWS_REGION=us-east-1`
-- `AWS_KMS_KEY_ID=alias/1scratch-kek-prod`
-- `AWS_ACCESS_KEY_ID=<from IAM user>`
-- `AWS_SECRET_ACCESS_KEY=<from IAM user>` — mark as **Sensitive**
+- Initial key was mistakenly created in **us-east-2** (Ohio) before noticing the region mismatch with Neon (`us-east-1`). The Ohio key was scheduled for 7-day deletion (KMS minimum) and replaced with a key in `us-east-1`.
 
-**Verify:** run `apps/web/src/lib/crypto/kms.ts` in a one-off script — encrypt `"ping"`, decrypt back, assert round-trip.
+**Env vars set in Vercel** (all via `printf '%s' "value" | vercel env add …` — see CLI trailing-newline quirk in Deviations):
 
----
+- `AWS_REGION=us-east-1` — Prod + Dev (Preview pending dashboard)
+- `AWS_KMS_KEY_ID=alias/1scratch-kek-prod` — Prod + Dev
+- `AWS_ACCESS_KEY_ID` — Prod + Dev
+- `AWS_SECRET_ACCESS_KEY` — Prod (**Sensitive**) + Dev (non-Sensitive)
 
-## 7. Paddle (sandbox) — separate vendor, NOT on Vercel Marketplace
-
-Paddle vets every seller; submit the application now so it's ready by Phase 2.
-
-- [ ] [sandbox-vendors.paddle.com](https://sandbox-vendors.paddle.com) → sign up as **1Scratch LLC** (SC entity).
-- [ ] Submit: website (placeholder OK — `https://1scratch.ai` with a coming-soon page is fine), legal docs (EIN letter), business model summary, sample product page link.
-- [ ] Wait 1–3 business days for approval.
-
-Once approved:
-
-- [ ] Sandbox dashboard → Developer Tools → Authentication → create API key `1scratch-server`.
-- [ ] Developer Tools → Notifications → create webhook endpoint `https://app.1scratch.ai/api/billing/paddle/webhook`, copy signing secret.
-- [ ] Catalog → Products → create `1Scratch Pro` with price `$10.00/month USD`, copy Price ID.
-
-**Env vars to set manually in Vercel:**
-
-- `PADDLE_API_KEY=<sandbox key>` (Preview + Development), separate live key → Production
-- `PADDLE_WEBHOOK_SECRET=<from webhook config>`
-- `PADDLE_PRO_PRICE_ID=<price id>`
-
-**Verify:** `curl -H "Authorization: Bearer $PADDLE_API_KEY" https://sandbox-api.paddle.com/prices` → lists `1Scratch Pro`.
+**Verified:** `node --env-file=apps/web/.env.development.local apps/web/scripts/verify-kms.mjs`:
+- Round-trip seal/open of `sk-ant-api03-TEST-PLAINTEXT-VERIFY` succeeded (34B ciphertext, 184B KMS-wrapped DEK)
+- Negative test: decrypting with a mutated `rowId` EncryptionContext throws `InvalidCiphertextException` → binding is enforced, row-swap attacks blocked
 
 ---
 
-## 8. Sentry — separate vendor
+## 7. Paddle (sandbox) — separate vendor, NOT on Vercel Marketplace 🟡
 
-- [ ] [sentry.io](https://sentry.io) → create org `1scratch`, plan = Developer (free).
-- [ ] Create two projects: `web` (Next.js platform) and `client` (JavaScript Browser platform).
-- [ ] Copy each DSN.
-- [ ] Install in `apps/web`: `pnpm --filter @1scratch/web add @sentry/nextjs` (deferred to Phase 1 final sub-step — not required for provisioning).
+Paddle sandbox sign-up went through without the 1–3 day wait (sandbox is self-serve; only **production** sellers get vetted, which happens at Phase 2 exit when we apply for live).
 
-**Env var to set manually:**
+- [x] [sandbox-vendors.paddle.com](https://sandbox-vendors.paddle.com) — signed up as **1Scratch LLC**.
+- [x] Sandbox dashboard → Developer Tools → Authentication → created API key `1scratch-server` (granted all permissions — sandbox only; production key will be scoped to Customers/Transactions/Subscriptions/Prices/Products/Events).
+- [x] Developer Tools → Notifications → created webhook destination `https://app.1scratch.ai/api/billing/paddle/webhook` (ID `ntfset_01kpf3zvth56b3ezjd97kwp18j`) + Platform-usage event scope; captured signing secret.
+- [x] Catalog → Products → `1Scratch Pro` created (`pro_01kpf42trs4gekehyndxbcgr2c`) with attached price `pri_01kpf43xe4jrq698xc5twnhtv6` @ $10.00 USD, monthly recurring, no trial.
+- [ ] **Deferred to Phase 2 exit:** submit production seller application (1–3 business days approval); create production API key + price + webhook in the live Paddle dashboard.
 
-- `SENTRY_DSN=<web project DSN>` (all envs)
-- `NEXT_PUBLIC_SENTRY_DSN=<web project DSN>` (same value, client-exposed)
-- `SENTRY_ORG=1scratch`, `SENTRY_PROJECT=web`, `SENTRY_AUTH_TOKEN=<org auth token>` (Production + Preview only — required for source-map upload in build)
+**Verified:** `GET https://sandbox-api.paddle.com/prices` with the sandbox API key returns the `pri_01kpf43xe4jrq698xc5twnhtv6` row.
 
----
+**Env vars (sandbox values; live values added at Phase 2 exit):**
 
-## 9. Axiom — via Vercel Marketplace
+- `PADDLE_API_KEY` — Development ✅ (CLI, non-Sensitive) · Preview ⏳ dashboard (add as **Sensitive**) · Production ⏳ (separate live key at Phase 2 exit)
+- `PADDLE_WEBHOOK_SECRET` — Development ✅ · Preview ⏳ dashboard (add as **Sensitive**) · Production ⏳ (live secret at Phase 2 exit)
+- `PADDLE_PRO_PRICE_ID` — Development ✅ · Preview ⏳ dashboard · Production ⏳ (live price ID at Phase 2 exit)
 
-- [ ] Dashboard → Integrations → Marketplace → Axiom → **Add Integration**.
-- [ ] Axiom dashboard → Datasets → confirm `1scratch-web` dataset exists (or create).
-- [ ] Axiom dashboard → Settings → Retention = 30 days (matches PLAN.md §2 — audit log retention).
-
-**Env vars auto-injected:**
-
-- `AXIOM_TOKEN`
-- `AXIOM_DATASET`
+> **Sandbox vs live split:** the sandbox API key is safe in Dev + Preview because its scope is the sandbox-only test data, but it MUST NOT leak into Production. When we apply for live Paddle and get approved, a new set of live credentials is added to Production only — sandbox stays in Preview for staging tests.
 
 ---
 
-## 10. Wrap-up: verify env scopes
+## 8. Sentry — separate vendor ✅
+
+- [x] [sentry.io](https://sentry.io) → org created. **Slug:** `1scratch-llc` (plan had `1scratch` — Sentry appended `-llc` to match legal entity name; JWT payload `"org":"1scratch-llc"` is authoritative). Plan = Developer (free).
+- [x] Two projects created: `web` (Next.js platform) and `client` (JavaScript Browser platform).
+- [x] DSNs captured:
+  - **web:** `https://9e7fbc68c4a76a54d3eaebeb4852e973@o4511238803030016.ingest.us.sentry.io/4511238810304512`
+  - **client:** `https://4f8b601683b530a2aa97fa8bf645d016@o4511238803030016.ingest.us.sentry.io/4511238833045504` (reserved for future Tauri desktop/mobile — not wired into Next.js build; Sentry Next.js SDK handles both server + client errors under one project)
+- [x] Org-level auth token created (name `1scratch-server`, region US). Sentry blocks scope editing on **organization tokens** — default scopes include `project:releases` + `org:read` which is what the Next.js SDK needs for source-map uploads. Acceptable.
+- [ ] Install in `apps/web`: `pnpm --filter @1scratch/web add @sentry/nextjs` — **deferred to Phase 1 final sub-step per original plan; not required for provisioning.**
+
+**Env vars set in Vercel** (via `printf '%s' "value" | vercel env add …` — see CLI trailing-newline quirk in Deviations):
+
+- `SENTRY_DSN` = web DSN — Dev ✅ (non-sensitive, CLI) · Prod ✅ (**Sensitive**, CLI) · Preview ✅ (**Sensitive**, dashboard — CLI `git_branch_required` quirk blocked Preview scope)
+- `NEXT_PUBLIC_SENTRY_DSN` = web DSN — Dev ✅ · Prod ✅ · Preview ✅ (non-sensitive; client-exposed by design)
+- `SENTRY_ORG=1scratch-llc` — Prod ✅ · Preview ✅ (not added to Dev — source-map upload only runs in CI builds)
+- `SENTRY_PROJECT=web` — Prod ✅ · Preview ✅
+- `SENTRY_AUTH_TOKEN` = `sntrys_…` org token — Prod ✅ (**Sensitive**) · Preview ✅ (**Sensitive**)
+
+---
+
+## 9. Axiom — via Vercel Marketplace ✅
+
+Axiom's Vercel integration has changed since PLAN.md was written: **no more `AXIOM_TOKEN` / `AXIOM_DATASET` pair**. The integration now injects a single signed ingest endpoint `NEXT_PUBLIC_AXIOM_INGEST_ENDPOINT` with `configurationId` + `projectId` embedded as query params, scoped to `type=web-vitals`. Functions/Edge logs ship separately via an auto-configured Vercel Log Drain that the integration sets up server-side (no env var needed).
+
+- [x] Dashboard → Integrations → Marketplace → Axiom → **Add Integration**.
+- [x] Dataset auto-created: **`vercel`** (integration default; original plan said `1scratch-web` — cosmetic-only, no blocker).
+- [x] Retention confirmed in Axiom dashboard (free tier default matches PLAN.md §2's 30-day audit-log requirement).
+- [x] Log drain active (auto-configured by integration — ships Functions + Edge logs to the `vercel` dataset alongside web-vitals).
+
+**Env vars auto-injected + propagated:**
+
+- `NEXT_PUBLIC_AXIOM_INGEST_ENDPOINT` — Prod ✅ (Marketplace auto-inject) · Dev ✅ (CLI, same value) · Preview ✅ (dashboard — same CLI `git_branch_required` quirk)
+
+> **Deviation from plan:** doc previously listed `AXIOM_TOKEN` + `AXIOM_DATASET` as the injected vars. New Axiom-Vercel integration replaces both with the single signed-endpoint pattern. Server-side Axiom queries (if ever needed — not required for Phase 1) would need a separately-created `AXIOM_TOKEN` via `https://app.axiom.co` → Settings → API Tokens.
+
+---
+
+## 10. Wrap-up: verify env scopes ✅
+
+**Status (2026-04-18):** `vercel env ls` run — all expected keys present; final `/api/health` check hit Neon and returned `db_time` successfully.
 
 ```bash
 cd /home/gino/programming/dev/scratch
@@ -244,7 +331,8 @@ Expected set, by scope:
 | `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_PRO_PRICE_ID` (manual) | ✓ (sandbox) | ✓ (sandbox) | ✓ (live) |
 | `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` (manual) | ✓ | ✓ | ✓ |
 | `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` (manual) |  | ✓ | ✓ |
-| `AXIOM_TOKEN`, `AXIOM_DATASET` (Axiom auto) | ✓ | ✓ | ✓ |
+| `NEXT_PUBLIC_AXIOM_INGEST_ENDPOINT` (Axiom auto Prod; CLI Dev; dashboard Preview) | ✓ | ✓ | ✓ |
+| `CLERK_WEBHOOK_SECRET` (manual, pending user creating webhook in Clerk) |  ⏳ (non-Sensitive) |  ⏳ (Sensitive) |  ⏳ (Sensitive) |
 
 Then pull to local:
 
@@ -252,7 +340,18 @@ Then pull to local:
 vercel env pull apps/web/.env.development.local
 ```
 
-**Final verify:** `cd apps/web && pnpm dev` → `http://localhost:3000/api/health` returns 200 with a body including a live DB timestamp.
+**Final verify (completed 2026-04-18):** `cd apps/web && pnpm dev` → `curl http://localhost:3000/api/health`:
+
+```json
+{
+  "status": "ok",
+  "service": "1scratch-web",
+  "time": "2026-04-18T04:38:55.642Z",
+  "db_time": "2026-04-18T04:38:55.608Z"
+}
+```
+
+The route at `apps/web/src/app/api/health/route.ts` was updated from a static timestamp to a live `select now() as db_time` query against Neon (direct `@neondatabase/serverless` tagged-template client — drizzle's `neon-http` execute path threw in drizzle-orm 0.36, see Deviations).
 
 ---
 

@@ -4,8 +4,9 @@ export const config: VercelConfig = {
   framework: 'nextjs',
   buildCommand: 'pnpm --filter @1scratch/web build',
   installCommand: 'pnpm install --frozen-lockfile',
-  // Sync workers run on a daily cadence to compact mutation logs.
   crons: [
-    { path: '/api/cron/compact-mutations', schedule: '0 4 * * *' },
+    // Purge account deletion requests whose 24-hr cool-off has elapsed.
+    // Runs hourly so the execution lag stays under an hour past the window.
+    { path: '/api/cron/purge-deletions', schedule: '0 * * * *' },
   ],
 }

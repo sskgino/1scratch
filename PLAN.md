@@ -253,6 +253,55 @@ Triggers:
 - ⏳ Tombstone GC after 30 days
 - 🔮 **Phase 2 swap:** introduce Yjs documents per `canvas`, persist Yjs binary updates in a new `canvas_doc_updates` table, server is just a relay. Existing card-table rows continue to exist as a queryable projection.
 
+### Architecture (v1 — Phase 2 step 2)
+
+Implementation architecture for the desktop Tauri client. Mobile (Phase 3) reuses the same engine via `@tauri-apps/plugin-sql`. Web gets an IndexedDB store impl only when/if the canvas UX ports to web.
+
+```
+┌─────────── apps/client (Tauri renderer) ───────────┐
+│                                                     │
+│  React/Zustand (render state — instant updates)     │
+│         ↕                                           │
+│  SyncProvider (React context, starts loop on login) │
+│         ↕                                           │
+│  packages/sync-engine                               │
+│    ├── SyncLoop       (triggers, backoff, concur)   │
+│    ├── Outbox         (pending push queue)          │
+│    ├── Reconciler     (apply server mutations→Store)│
+│    ├── DirtyTracker   (500ms diff → mutations)      │
+│    └── HttpClient     (/api/sync/push, /pull)       │
+│         ↕ Store interface                           │
+│  apps/client/src/sync/tauri-sqlite-store.ts         │
+│         ↕ @tauri-apps/plugin-sql                    │
+│  SQLite file (app data dir)                         │
+└─────────────────────────────────────────────────────┘
+         ↕ HTTPS + Clerk JWT
+┌─────────── apps/web (Next.js) ──────────────────────┐
+│  POST /api/sync/push   GET /api/sync/pull           │
+│     ↕ withRls(userId, …)                            │
+│  Neon Postgres: mutations, cards, canvases, sections│
+└─────────────────────────────────────────────────────┘
+```
+
+**Key invariants:**
+- Zustand = UI projection; SQLite = local source of truth; server `mutations` log = global truth.
+- On startup: Zustand hydrates from SQLite (fast read), then SyncLoop pulls delta, then DirtyTracker begins observing.
+- Every user action: Zustand updates immediately → DirtyTracker flags entity → 500ms debounce → snapshot diff → mutation into SQLite `outbox` table → SyncLoop pushes.
+- Mutations carry a client-generated `nanoid` id → idempotent replays on retry.
+- `packages/sync-engine` has zero Tauri/React deps — pure TS, Node-testable; `Store` interface is the seam for future IndexedDB / other impls.
+
+**Locked design decisions (from brainstorming 2026-04-18):**
+- Scope: desktop Tauri only in Phase 2; mobile reuses in Phase 3; web canvas deferred.
+- Streaming response persistence: final-mutation-only (single upsert on stream completion; partial text not durable mid-stream).
+- Edit coalescing: optimistic in-memory via Zustand + 500ms DirtyTracker flush to outbox.
+- Single-active-device: no enforcement in v1; LWW by HLC handles concurrent writes; revisit with v2 CRDT swap.
+- Entity scope: `cards`, `canvases`, `sections` only. Not `workspaces`/`model_slots`/`provider_connections`/`ai_usage`.
+- First-sign-in with existing local Zustand data: auto-migrate via synthesized upsert mutations; no user-facing import step.
+- Server reconciliation: always append to `mutations` log; upsert materialized row only when incoming HLC > current row version. Preserves history for v2.
+- Echo handling: client skips pulled `ServerMutation`s where `deviceId === ownDeviceId`.
+
+Full spec: `docs/superpowers/specs/2026-04-18-sync-v1-design.md`.
+
 ---
 
 ## 5. Auth Flow
@@ -409,32 +458,53 @@ Each phase is ~3 weeks. Dates are calendar weeks from kickoff (W0 = today).
 
 **Goal:** A deployed Vercel app, schema in Neon, Clerk login working, AI proxy streaming end-to-end. No mobile yet, no sync — just prove the spine.
 
-- [ ] Provision: Vercel project, Neon DB (us-east + EU read replica), Clerk, Resend, Paddle (sandbox), AI Gateway, Sentry, Axiom
-- [ ] `vercel.ts` config (TypeScript-typed)
-- [ ] Schema migrations (Drizzle ORM) for §3, RLS policies, seed test data
-- [ ] Clerk wired in Next.js, session middleware sets `app.user_id` Postgres GUC
-- [ ] Envelope encryption helper (`@aws-crypto/client-node` against AWS KMS or Vercel-side using `crypto.subtle` + a KMS-held KEK)
-- [ ] `POST /ai/stream` endpoint: Workflow-wrapped, proxies through AI Gateway, streams SSE, writes `ai_usage` + `auth_events`
-- [ ] Per-user spend cap enforcer (read `users.daily_ai_cap_cents`, sum today's `ai_usage`)
-- [ ] BotID on `/auth/*` and `/ai/*`
-- [ ] Throwaway web client at `app.1scratch.ai` to drive proof-of-life: log in, paste API key, run a prompt
-- [ ] Sentry, Axiom, Web Vitals dashboards live
+**Provisioning runbook:** full executable checklist at [`docs/provisioning.md`](./docs/provisioning.md). Summary of status below (as of 2026-04-18):
+
+- [x] **Vercel project** — `1scratch-web` linked, root `apps/web`, Node 24.x, domains `app.1scratch.ai` + `api.1scratch.ai`, first deploy green
+- [x] **Neon DB (us-east-1)** — via Marketplace, branching enabled, migrations applied, `admin_user` role + `DATABASE_URL_ADMIN` provisioned (see runbook Step 2 for `BYPASSRLS` gotcha)
+- [ ] **Neon EU read replica** — deferred to Phase 4
+- [x] **AWS KMS** — KEK `alias/1scratch-kek-prod` in us-east-1, IAM user `vercel-kms-1scratch`, seal/open verified, EncryptionContext binding enforced
+- [x] **AI Gateway** — key `1scratch-server` created, Anthropic call verified; ZDR toggle deferred (Hobby plan — tracked in TODO)
+- [x] **Resend** — manual signup (Marketplace integration failed), `1scratch.ai` domain verified via Cloudflare DNS, test send confirmed
+- [x] **Clerk** — Marketplace integration + dashboard session/JWT/origins done; webhook endpoint registered (Prod+Preview+Dev); `email.created` → Resend handler live for unlocked templates. Three templates (Verification code, Reset password code, Invitation) stay Clerk-delivered on current plan — tracked in TODO for Phase 4 revisit
+- [🟡] **Paddle (sandbox)** — product `1Scratch Pro` + price + webhook created, API key verified; Preview env scope pending dashboard; Production waits on live seller approval at Phase 2 exit
+- [x] **Sentry** — org `1scratch-llc`, projects `web` + `client`, DSNs + auth token in env; `@sentry/nextjs` install deferred to Phase 1 final sub-step
+- [x] **Axiom** — Marketplace integration (new signed-endpoint pattern, no token/dataset pair), log drain active, dataset = `vercel`
+- [x] **`vercel.ts` config** (TypeScript-typed) — `apps/web/vercel.ts` (framework + build/install commands; daily compact-mutations cron deferred to Phase 2 when the route exists)
+- [x] **Schema migrations (Drizzle ORM)** for §3, RLS policies, seed test data — full §3 schema in `src/db/schema.ts`; 0000_initial_schema + 0001_rls applied
+- [x] **Clerk middleware** — `apps/web/middleware.ts` protects `/app/*`, `/api/sync`, `/api/ai`, `/api/providers`; per-request `app.user_id` GUC set via `withRls()` (tx-scoped `set_config`) because Neon HTTP is stateless per request
+- [x] **Envelope encryption helper** — `apps/web/src/lib/crypto/kms.ts` (`seal`/`open`) using AWS KMS `GenerateDataKey` + AES-256-GCM; ctx binding enforced
+- [🟡] `POST /api/ai/stream` — Clerk-authed, BotID-gated, decrypts stored Anthropic key, streams via AI SDK v6, writes `ai_usage` on finish, rejects over-cap. **Workflow DevKit wrap deferred to Phase 2** (needs multi-provider fallback chain from Edge Config, which is itself Phase 2). **AI Gateway BYOK passthrough deferred to Phase 2** — Phase 1 uses `createAnthropic({ apiKey })` direct; Gateway adds observability + fallbacks but isn't on the exit-criteria critical path
+- [x] Per-user spend cap enforcer — `apps/web/src/lib/spend-cap.ts` (`checkCap` / `recordUsage` / `estimateCostMicros`)
+- [x] BotID — `withBotId()` wraps next.config, `initBotId()` in `instrumentation-client.ts`, `checkBotId()` at the top of `/api/ai/stream` + `/api/providers`
+- [x] Clerk webhook handler — `apps/web/src/app/api/webhooks/clerk/route.ts` (verifyWebhook from `@clerk/nextjs/webhooks`, user.created/deleted → Neon, email.created → Resend with `{error}` check + `clerk-email/${svix-id}` idempotency). Endpoint registered at `https://app.1scratch.ai/api/webhooks/clerk`
+- [x] `@sentry/nextjs` install — `instrumentation.ts`, `sentry.{server,edge}.config.ts`, `instrumentation-client.ts` Sentry.init, next.config wrapped with `withSentryConfig`; source-map upload reads `SENTRY_AUTH_TOKEN` in CI
+- [x] Web client at `app.1scratch.ai` — `/app` workbench: paste key → prompt → streamed response, cap meter, drafting-vellum aesthetic matching marketing. Single-card surface; full infinite-canvas ports in Phase 2. (Chose real vs throwaway — tokens/design system carry forward.)
+- [x] `/api/health` returns live Neon `db_time` (used as provisioning smoke test)
+- [x] Integration tests — `tests/integration/rls.test.ts` (cross-tenant isolation, 4 cases including fail-closed), `tests/integration/spend-cap.test.ts`; `src/lib/crypto/kms.test.ts` (KMS round-trip + ctx mismatch). Gated on `DATABASE_URL_ADMIN` — skip gracefully without
 
 **Exit criteria:** A logged-in user with a verified Anthropic key can stream a response end-to-end, with usage logged and capped.
+
+**Accepted Phase 1 exits with deferrals** (documented, tracked in TODO):
+- AI Gateway Zero Data Retention — blocks on Vercel Pro upgrade; Phase 1 traffic is pre-beta so no user data at risk
+- AI Gateway BYOK passthrough — Phase 1 calls provider SDKs directly; Gateway layering adds fallbacks + observability in Phase 2
+- Workflow DevKit wrap — lands with multi-provider fallback chains in Phase 2
+- Clerk webhook registration — handler code shipped; dashboard registration pending
 
 ### Phase 2 — Desktop Client + Sync v1 (W3 → W6)
 
 **Goal:** The existing Tauri desktop app authenticates against the backend, replaces local-only state with backend-synced state, model page ships.
 
-- [ ] Replace `localStorage` settings with Clerk-authenticated session + server-stored `model_slots` and `provider_connections`
-- [ ] Local SQLite mutation queue + sync push/pull (§4) — single device, no conflict-resolver-beyond-LWW
-- [ ] OAuth callback flow (`1scratch://` deep link via `tauri-plugin-deep-link`)
-- [ ] Model page (§7) — full UX
-- [ ] Provider verifiers for Anthropic, OpenAI, Google, OpenRouter, Ollama
-- [ ] Migration utility: import existing `.scratch` files into the cloud
+- [x] Replace `localStorage` settings with Clerk-authenticated session + server-stored `model_slots` and `provider_connections` — server-side CRUD (`GET/PUT /api/model-slots`, `DELETE /api/model-slots/[slot]`, `POST /api/providers/[id]/verify`, `DELETE /api/providers/[id]`) **plus** client swap: workbench now streams by `slot` (no hardcoded model/provider); inline key-paste form removed — all credential management lives on `/app/models`
+- [ ] Local SQLite mutation queue + sync push/pull (§4) — single device, no conflict-resolver-beyond-LWW *(blocked on `/brainstorming` for sync protocol)*
+- [x] OAuth callback flow — **web path live** for OpenRouter PKCE: `/oauth/start/[provider]` issues S256 challenge + sets HttpOnly verifier cookie, `/oauth/callback/[provider]` exchanges code via `POST /api/v1/auth/keys`, seals the returned API key, inserts `provider_connections` with `kind='oauth'` + `status='connected'`, redirects to `/app/models?oauth=connected`. Desktop `1scratch://` deep-link intercept lands with `tauri-plugin-deep-link` in Phase 3 (mobile also)
+- [x] Model page (§7) — full UX: `/app/models` with 10-slot pill grid, connected-providers list (test / remove), slot editor modal (provider + model + label), connect modal (BYOK for all providers; "sign in instead" for OpenRouter OAuth). Aesthetic matches Workbench drafting-vellum
+- [x] Provider verifiers for Anthropic, OpenAI, Google, OpenRouter, Ollama — pure verifier fns in `src/lib/verifiers/*.ts` with 5s timeout + SSRF guard (RFC1918/link-local/CGNAT/mDNS/IPv6-ULA); 29 tests pass
+- [x] **Workflow DevKit wrap of AI stream** — `src/workflows/ai-stream.ts` orchestrates per-attempt provider calls; multi-provider fallback chain (same-provider only in v1; cross-provider deferred) via static `src/lib/model-registry.ts` (Edge Config deferred to Phase 4); route returns `run.getReadable()` with `X-Workflow-Run-Id` header; 3 orchestrator tests pass
+- [x] Migration utility: import existing `.scratch` files into the cloud — `POST /api/import/scratch` (5 MB cap, Zod-validated legacy shape), `importScratchFile()` materializes a workspace + "Imported" section lazily and stamps HLC on inserted cards; Settings → Import UI drives it
 - [ ] Paddle Checkout (overlay or hosted) for Pro upgrade; webhook handler for `subscription.created/updated/canceled` writes `users.tier`; Customer Portal for billing self-serve. Sandbox → live at end of phase.
-- [ ] Account deletion flow with 24-hr cool-off
-- [ ] Audit log viewable in Settings → Security
+- [x] Account deletion flow with 24-hr cool-off — email-confirm + revocable window. `POST /api/account/delete-request` hashes a one-time token (plaintext emailed via Resend, never stored), `POST /api/account/delete-confirm` starts the 24-hr clock, `POST /api/account/delete-cancel` aborts; hourly cron `/api/cron/purge-deletions` (guarded by `CRON_SECRET`) executes due rows via Clerk `users.deleteUser` + FK cascade. Partial unique index enforces one active request per user
+- [x] Audit log viewable in Settings → Security — `auth_events` table (RLS: owner SELECT + INSERT) records sign_in/credential_add/credential_remove/decrypt_for_use/oauth_connected/scratch_imported/account_delete_*; `/app/settings` page renders last 100 events with a refresh button; BYOK + OAuth + deletion routes instrumented via `record()` / `recordAdmin()`
 - [ ] Threat-model items: cert-pinning the API hostname, refresh-token rotation, RLS verified by automated test
 
 **Exit criteria:** A user can sign in on desktop, configure all 10 model slots with mixed providers, run prompts, and lose/restore the local cache without data loss.
@@ -534,6 +604,8 @@ These can be answered any time before the phase that needs them:
 
 Phase 1 kickoff (unblocked, can start now): provision Vercel + Neon + Clerk + AWS KMS + Resend + Paddle (sandbox); write `vercel.ts`; Drizzle schema + RLS migrations; AI proxy with streaming + spend caps; SPF/DKIM/DMARC for `1scratch.ai`. Each phase ends with a demo and a decision-point review.
 
+**Provisioning status (2026-04-18):** all vendor sign-up / Marketplace / env-var work is ✅. Clerk webhook live for unlocked templates (three stay Clerk-delivered on current plan — TODO). `DATABASE_URL_ADMIN` live on Prod+Preview+Dev — integration tests pass against live Neon. Paddle live credentials still block on seller approval at Phase 2 exit. SPF/DKIM/DMARC for `1scratch.ai` live via Resend + Cloudflare DNS. See [`docs/provisioning.md`](./docs/provisioning.md) for the full executable runbook with deviations.
+
 ---
 
 # Appendix A — Local Tauri MVP (already shipped)
@@ -590,3 +662,234 @@ interface SettingsState { apiKey; fontFamily; modelSlots: Record<string,string> 
 | Cancel stream | Escape |
 | Section / tab color | Right-click → Change color |
 | Section / tab rename | Double-click OR right-click → Rename |
+
+---
+
+# TODO — deferred follow-ups
+
+Items that are known-needed but blocked on something external (plan upgrade, approval, volume trigger). Revisit before the phase that needs them.
+
+- **Enable AI Gateway Zero Data Retention** *(blocked on Vercel Pro plan — required by §2 threat model)*
+  - Vercel Hobby plan doesn't expose the ZDR toggle on AI Gateway. Once we move `1-scratch-llc` to Pro, go to AI Gateway → Settings → enable **Zero Data Retention**. Must be ON before any real user traffic hits the proxy (Phase 1 exit criteria / latest by Phase 4 public launch).
+  - Trigger to upgrade: whichever comes first of (a) first real beta cohort needing ZDR per privacy policy, (b) needing BotID / Rolling Releases / team seats / advanced observability, (c) Phase 4 launch prep.
+- **Paddle live seller approval + production credentials** *(blocks on Paddle 1–3 business day review; Phase 2 exit)* — submit production seller application, then create live API key + price + webhook in live Paddle dashboard; populate `PADDLE_*` Production env vars.
+- **Neon EU read replica** *(Phase 4)* — add second region under same Neon project; route EU-resident users.
+- **Second KEK `alias/1scratch-kek-eu` in `eu-central-1`** *(Phase 4)* — for EU data-residency routing.
+- **Vercel env Preview-scope backfill** — CLI quirk `git_branch_required` blocks `vercel env add NAME preview` even with `--value/--yes`. Workaround: add Preview via dashboard (tick Prod + Preview when editing). Applies to: `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL`, `PADDLE_*`, `AWS_REGION`, `AWS_KMS_KEY_ID`.
+- **AI Gateway BYOK passthrough** *(deferred — likely won't happen)* — Phase 2 picked **Option A: direct SDK + Workflow DevKit fallback chain** (user-BYOK keys stay on provider SDKs, fallbacks handled by DevKit per-attempt). Gateway BYOK passthrough would duplicate the fallback capability for marginal observability win; revisit only if per-request Gateway routing becomes valuable (e.g. per-user rate limiting, tag-based spend reporting) once traffic justifies it.
+- **Edge Config model registry** *(Phase 4)* — current registry is the static `src/lib/model-registry.ts`. Moving to Edge Config unblocks hot-swap of pricing / fallback chains without a deploy, but adds <10ms read latency to a code path that already tolerates 2-3s of LLM streaming. Low-urgency.
+- **Clerk locked email templates** *(Phase 4 launch prep)* — three security-critical templates stay Clerk-delivered on current plan: **Verification code**, **Reset password code**, **Invitation**. Toggles are greyed out — Clerk gates "Remove Clerk branding" behind higher tier. Impact: email+password sign-up verification codes and password-reset codes arrive from Clerk's sender (users see "via clerk.com" badge in Gmail). Non-blocking for beta; revisit at launch alongside Vercel Pro bundle — either upgrade Clerk plan or drop email+password flow and keep only social + magic-link. `email.created` events for the remaining templates (magic link, welcome, etc.) route through Resend correctly.
+- **`DATABASE_URL_ADMIN` env** *(Phase 1)* — Neon admin role was provisioned but the connection string isn't in `.env.development.local` / Vercel envs yet. Integration tests `rls.test.ts` and `spend-cap.test.ts` skip without it. Pull from Neon dashboard or mint via `neon connection-string --role admin_user`.
+
+---
+
+# Build Log — Amendments & Deviations
+
+Running ledger of in-flight changes to the plan as we actually build. Each entry: date, section affected, what changed, why. Append newest at the top. When an amendment supersedes an original plan decision, note the old assumption so future-us doesn't get confused re-reading the earlier sections.
+
+## 2026-04-18 (later) — Phase 2 steps 7, 9, 10: import, deletion, audit log
+
+Scoped pass: picked the three leftover **unblocked** Phase 2 steps (step 5 sync-protocol still gated on `/brainstorming`; step 8 Paddle gated on live-seller approval).
+
+**Schema (migration `0002_phase2_audit_and_deletion.sql`).** Two new tables, both with `FORCE ROW LEVEL SECURITY`:
+- `auth_events` — `bigserial` PK, `user_id` → `users(id)` ON DELETE CASCADE, `kind` text, `ip inet`, `ua text`, `meta jsonb`, `ts timestamptz`. Separate RLS policies (`FOR SELECT` + `FOR INSERT`) rather than `FOR ALL` so the table is effectively append-only from the user's perspective. Index `(user_id, ts DESC)` for cheap recent-events listing.
+- `account_deletion_requests` — `uuid` PK, `user_id` FK, `confirm_token_hash text` (sha256 hex — plaintext is emailed once via Resend and never stored), `status` (`pending|confirmed|cancelled|executed`), `requested_at`, `confirmed_at`, `executes_after`, `cancelled_at`, `executed_at`. **Partial unique index** on `(user_id) WHERE status IN ('pending','confirmed')` enforces one active request per user. Standard owner-scoped RLS policy covers both halves.
+
+**Key design choices:**
+- **24-hr clock starts on CONFIRM, not REQUEST.** The request row is written with `executes_after = now() + 24h`, but the confirm route **rewrites** it to `now() + 24h`. A user who never clicks the email link never loses data.
+- **Token never stored in plaintext.** `hashToken()` computes sha256 hex; the confirm route hashes the incoming token and matches; FK cascades (`ON DELETE CASCADE` on `users.id`) mean `executeDeletion` only needs `DELETE FROM users WHERE id = ?` to wipe every owned row.
+- **Audit write paths split.** Normal handlers use `record(userId, kind, opts)` inside the user's RLS-scoped transaction (so RLS verifies the write). Admin paths (confirm route, cron execute) use `recordAdmin(...)` against `sqlAdmin` because they act on behalf of a user whose session context isn't available. Both paths write to the same table.
+- **Cron auth.** `/api/cron/purge-deletions` guards on `Authorization: Bearer ${CRON_SECRET}` (Vercel convention). Schedule hourly in `apps/web/vercel.ts`.
+- **Workspace bootstrap is lazy.** Clerk webhook only seeds a `users` row; `ensureDefaultWorkspaceAndSection(userId, 'Imported')` materializes a workspace + named section on first write and is idempotent. Used by the importer; foundation for future "first-write" flows too.
+
+**Files added:**
+- `apps/web/src/db/migrations/0002_phase2_audit_and_deletion.sql`
+- `apps/web/src/lib/audit-events.ts`, `account-deletion.ts`, `import-scratch.ts`, `workspace.ts`, `hlc.ts`
+- Routes: `/api/import/scratch`, `/api/account/delete-request`, `/api/account/delete-confirm`, `/api/account/delete-cancel`, `/api/cron/purge-deletions`, `/api/audit-events`
+- UI: `/app/account/delete-confirm` (public token-landing page), `/app/settings/page.tsx` + `SettingsPanel.tsx` (import / audit / danger zone, three sections)
+- Tests: `tests/integration/import-scratch.test.ts` (2 cases), `tests/integration/account-deletion.test.ts` (4 cases). Full suite: **59 passed**.
+- `apps/web/scripts/apply-0002.mjs` — one-shot runner left in place; see next bullet on why we didn't actually use it.
+
+**Files edited:**
+- `apps/web/src/db/schema.ts` — Drizzle types for both new tables.
+- `apps/web/proxy.ts` — added `/api/import(.*)`, `/api/account/delete-request|cancel`, `/api/audit-events(.*)` to the Clerk-protected matcher. `/api/account/delete-confirm` stays public (the token IS the proof); `/api/cron/*` stays public (guarded by `CRON_SECRET`).
+- `apps/web/src/app/app/layout.tsx` — added "settings" nav link.
+- `apps/web/vercel.ts` — `crons: [{ path: '/api/cron/purge-deletions', schedule: '0 * * * *' }]`.
+- Audit instrumentation: `api/providers/route.ts` + `api/providers/[id]/route.ts` + `oauth/callback/[provider]/route.ts` now emit `credential_add|remove|oauth_connected` events.
+
+**Migration application (gotcha worth saving).** The handwritten SQL needed to land on the live Neon DB. Four consecutive failures:
+1. `sql.query(raw)` → Neon HTTP rejects multi-statement prepared strings.
+2. Split-and-loop over `DATABASE_URL_ADMIN` → `admin_user` lacks DDL privs (can't `CREATE TABLE` in `public`).
+3. Switched to `DATABASE_URL` (connects as `neondb_owner`) → **still** `permission denied for schema public`. Reason: Neon HTTP driver is stateless per query, so a leading `RESET ROLE` in an earlier query doesn't persist. And `ALTER ROLE neondb_owner SET ROLE app_user` in the earlier provisioning pass means `RESET ROLE` actually resets *to* `app_user` (the login default), not off.
+4. Bundle `[sql\`RESET ROLE\`, ...stmts]` into one `sql.transaction([...])` → same error — `RESET ROLE` was the wrong verb; needed explicit `SET ROLE neondb_owner`.
+
+Resolution: ran the 17-statement transaction through the Neon MCP tool (`mcp__plugin_neon_neon__run_sql_transaction`) with `SET ROLE neondb_owner` as the first statement. Lesson for Phase 2 step 8+: **always prepend `SET ROLE neondb_owner` as the first statement of a DDL transaction** — `RESET ROLE` is unreliable when the login role has a default-role setting.
+
+**Deferred / still open:**
+- Step 5 (sync push/pull) — still blocked on `/brainstorming`.
+- Step 8 (Paddle Checkout) — blocked on live-seller approval.
+- Step 11 threat-model items (cert pinning, refresh-token rotation, RLS automated test) — step 10 lands the audit half; the other two remain.
+- `scripts/apply-0002.mjs` now unused but left as a reference for future DDL script writers; remove when superseded by a proper `db:apply` pnpm target.
+
+## 2026-04-18 (late) — Phase 2 step 4 + step 1 client swap + step 3 OAuth
+
+Scoped pass: steps 4 (Model page §7), 1 (client swap onto slot-based streaming), 3 (OAuth callback, web path). Steps 5-10 deferred; step 5 still blocked on `/brainstorming` for sync protocol.
+
+**Design decision (OAuth storage):** OpenRouter's PKCE flow mints a long-lived API key rather than an OAuth access/refresh pair. Storing it via the same envelope-encryption columns as BYOK keys (only `kind='oauth'` differs) avoided a schema migration and keeps `/api/ai/stream` provider code path unchanged. If a future provider returns real access+refresh pairs, seal a JSON blob `{access, refresh, expiresAt}` into the existing `secret_ciphertext` — no migration needed.
+
+**Step 4 — Model page §7:**
+- `src/app/app/models/page.tsx` + `ModelsPage.tsx` (client) — 10-pill grid, provider list, slot editor modal, connect modal
+- Slot editor: provider dropdown (from user's connected providers) → model dropdown (intersected with `modelsByProvider(provider)` registry entries) → optional label; save via `PUT /api/model-slots`; clear via `DELETE /api/model-slots/[slot]`
+- Connect modal: provider picker → BYOK form (api key, or `endpointUrl` for Ollama) OR "sign in instead" button (OpenRouter only) that sends the browser to `/oauth/start/openrouter`
+- Provider row: status dot + test + remove. "Test" fires `POST /api/providers/[id]/verify`; "remove" fires `DELETE /api/providers/[id]` and optimistically nulls any slots pointing at the deleted connection (server already handles via `ON DELETE SET NULL`)
+- Added `kind` to `ConnectionPublic` + `listConnections` SELECT so the client can badge oauth connections
+
+**Step 1 — client swap:**
+- `src/app/app/page.tsx` (server) now fetches `listSlots` + `listConnections` + `checkCap` + registry summary, passes populated slots to `Workbench`
+- `src/app/app/Workbench.tsx` — removed inline key-paste `KeyBar` entirely; replaced with `SlotBar` (chip picker over populated slots). Prompt submission sends `{ slot, prompt }` to `/api/ai/stream` instead of hardcoded `{ connectionId, provider, model: 'claude-haiku-4.5' }`
+- Empty-state: no populated slots → "go to models →" link rendered in place of the slot chips
+- Layout nav: added `workbench` + `models` links in `layout.tsx` header
+
+**Step 3 — OAuth callback (web path):**
+- `src/lib/oauth/pkce.ts` — `generateCodeVerifier()` (32 random bytes → 43-char base64url) + `codeChallengeS256()` (SHA-256 → base64url). RFC 7636 vector verified
+- `src/lib/oauth/openrouter.ts` — `buildAuthorizeUrl({ callbackUrl, codeChallenge })` + `exchangeCode({ code, codeVerifier })` → `{ key }`; 10s timeout via `AbortSignal.timeout`
+- `src/lib/providers.ts` — extracted `saveConnection()` core used by both `saveApiKey` (unchanged callsite signature) and new `saveOauthConnection` (kind='oauth', status='connected' with `last_verified_at = now`)
+- `src/app/oauth/start/[provider]/route.ts` (Node runtime) — authed; zod-validated `provider` enum (openrouter only today); writes HttpOnly + SameSite=Lax verifier cookie `oauth_pkce_<provider>` scoped to `/oauth` with 10-min TTL; redirects to provider authorize URL
+- `src/app/oauth/callback/[provider]/route.ts` (Node runtime) — authed; reads cookie, validates `stored.userId === authedUserId` (CSRF guard beyond just having the cookie), exchanges code, seals secret, inserts connection, clears cookie, redirects to `/app/models?oauth=connected`. All error paths redirect with a diagnostic `oauth=<reason>` query param so the UI can surface them without exposing internals
+- Proxy/middleware: `/oauth/*` is not in `isProtectedRoute`; handler-level `auth()` enforces login and redirects to `/sign-in` — correct because the browser's Clerk session cookies survive the external provider redirect back to our origin
+
+**Tests:** `src/lib/oauth/pkce.test.ts` — RFC 7636 vector + verifier distinctness + charset assertion. 53/53 pass, typecheck clean.
+
+**Deferred from this scope:**
+- Desktop/mobile `1scratch://oauth/done?id=...` deep-link return path — lands with `tauri-plugin-deep-link` in Phase 3. Web path ships today.
+- Live OpenRouter OAuth smoke test — requires registering the callback URL with OpenRouter (out-of-band config), plus a real user clicking through. Code path unit-tested; integration test requires a sandbox we don't have yet.
+- Anthropic / Google / OpenAI OAuth — none currently expose a public PKCE consumer flow; revisit as providers ship.
+
+## 2026-04-18 — Phase 2 steps 1-3: server CRUD, verifiers, Workflow DevKit wrap
+
+Scoped pass: steps 1-3 of Phase 2 per user guardrail (steps 4-10 deferred; step 5 blocked on `/brainstorming` for sync protocol).
+
+**Design decision (locks Phase 2 provider topology):** picked **Option A — direct SDK + Workflow DevKit fallback chain**. User-BYOK keys flow through provider SDKs (`@ai-sdk/anthropic`, `@ai-sdk/openai`, `@ai-sdk/google`); DevKit's step-level retry substitutes fallback models on transient failures. AI Gateway BYOK passthrough is de-scoped (see TODO). Gateway stays available for server-managed calls if/when per-user rate limiting justifies it.
+
+**Step 1 — model registry + slot CRUD:**
+- `src/lib/model-registry.ts` — static canonical list (6 models: sonnet-4.6, haiku-4.5, opus-4.6, gpt-5.4, gemini-2.5-pro, gemini-2.5-flash) with price (micros/M tokens), context window, capabilities, same-provider fallback chains
+- `src/lib/model-slots.ts` — slots 0-9 CRUD; `SlotValidationError` with codes `invalid_slot` / `unknown_model` / `unknown_connection` / `provider_mismatch`; `listSlots` returns dense 10-element array with nulls
+- `src/lib/spend-cap.ts` — `estimateCostMicros` now registry-aware (per-model pricing, not flat default)
+- `src/app/api/model-slots/route.ts` (GET/PUT) + `[slot]/route.ts` (DELETE) — zod-validated, 400 on `SlotValidationError`, Next 16 async params
+- `tests/integration/model-slots.test.ts` — 10 cases (empty→nulls, upsert, idempotent, clear, slot range, unknown model, provider mismatch, cross-tenant RLS)
+
+**Step 2 — provider verifiers:**
+- `src/lib/verifiers/{anthropic,openai,google,openrouter,ollama}.ts` — pure `(plaintext, endpointUrl?) → VerifyResult` shapes with 5s `AbortSignal.timeout`; Ollama's `isServerVerifiable` blocks RFC1918 / link-local / CGNAT (`100.64.0.0/10`) / mDNS `.local` / IPv6 ULA (`fc00::/7`)
+- `src/app/api/providers/[id]/verify/route.ts` (POST) — decrypts stored key, runs verifier, updates `status` + `last_verified_at`, returns available models intersected with registry
+- `src/app/api/providers/[id]/route.ts` (DELETE) — remove connection
+- `src/app/api/providers/route.ts` — widened provider enum; conditional refine (Ollama needs `endpointUrl`; others need `apiKey`)
+- `src/lib/verifiers/verifiers.test.ts` — 29 tests with global `fetch` stub + 14-case SSRF block table
+
+**Step 3 — Workflow DevKit wrap:**
+- `next.config.ts` — `withWorkflow(config)` added; wrapper chain is `withSentryConfig(withBotId(withWorkflow(config)), …)`
+- `proxy.ts` — matcher excludes `.well-known/workflow/` (required for DevKit internal paths)
+- `src/workflows/ai-stream.ts` — three step functions + pure orchestrator:
+  - `buildAttemptChain` resolves `slot | connectionId+modelId | provider+modelId` → ordered `Attempt[]`; off-registry models get a single-attempt chain (no fallback)
+  - `runAttempt` decrypts key, picks SDK by provider, pipes `streamText().textStream` into `getWritable<string>()`, returns discriminated `AttemptResult` (`invalid`/`transient`/`no_key`/`unsupported_provider` or `ok` with tokens)
+  - `writeUsageRow` calls `recordUsage` after a successful attempt
+  - Orchestrator loops the chain, stops on `invalid`/`no_key`, returns `{ modelUsed, provider, inputTokens, outputTokens }` or `{ error }`
+- `src/app/api/ai/stream/route.ts` — rewritten to just auth+cap gate, `start(aiStreamWorkflow, [input])`, return `run.getReadable()` with `Content-Type: text/plain; charset=utf-8` and `X-Workflow-Run-Id` header
+- `tests/ai-stream.test.ts` — 3 orchestrator tests with `vi.mock`-ed step deps: fallback path (sonnet→haiku on transient), `no_connection_for_request` path, `no_key` short-circuit. Chose unit-test path over `@workflow/vitest` bundle setup per Karpathy §2 — directives are no-ops outside the SWC transform, so the workflow runs as plain JS and `vi.mock` works.
+
+**Results:** 50/50 tests pass, typecheck clean. `@workflow/vitest` installed for future use; separate vitest config not created.
+
+## 2026-04-18 — Phase 1 implementation: ship proof-of-life
+
+Implementation pass on Phase 1 backend + proof-of-life web client.
+
+- **§10 Phase 1 exit criteria amended:** now explicitly allows four documented deferrals (ZDR, Gateway BYOK passthrough, Workflow DevKit wrap, Clerk webhook dashboard registration) so Phase 1 can land without waiting on Vercel Pro plan approval. Exit criteria still hold: a user signs in, pastes a key, streams a response, sees it logged and capped.
+- **New modules:**
+  - `apps/web/src/lib/crypto/kms.ts` — `seal`/`open` envelope crypto with KMS-bound EncryptionContext
+  - `apps/web/src/lib/providers.ts` — BYOK credential store (`saveApiKey`, `listConnections`, `loadDecryptedKey`, `findConnectionByProvider`)
+  - `apps/web/src/lib/spend-cap.ts` — daily $ cap enforcer; token→cost model ships a sane default (Edge Config registry takes over in Phase 2)
+  - `apps/web/src/db/rls.ts` — `withRls(userId, queries[])` wraps Neon HTTP transaction so `set_config('app.user_id')` + queries share a session (required because HTTP driver is stateless per request; also sidesteps the drizzle 0.36 `execute()` bug)
+- **Routes:**
+  - `POST /api/ai/stream` — Clerk-authed, BotID-gated, cap-checked, streams via AI SDK v6 `streamText` + `toTextStreamResponse()`
+  - `GET/POST /api/providers` — list / save BYOK keys
+  - `GET /api/cap` — today's cap usage
+  - `POST /api/webhooks/clerk` — Svix-verified, user.created/deleted/email.created handlers
+- **Proof-of-life client:** `/app` route (server-component auth + cap fetch; `Workbench.tsx` client with paste-key → prompt → streamed response → cap meter). Chose "real" over "throwaway" — shared design tokens and aesthetic continue into Phase 2's canvas port.
+- **Observability:** Sentry via `instrumentation.ts` (server + edge) and `instrumentation-client.ts` (also hosts BotID `initBotId`). Source-map upload configured in `next.config.ts` via `withSentryConfig`.
+- **Tests:** Vitest. `kms.test.ts` (KMS round-trip + ctx mismatch), `rls.test.ts` (4 isolation cases incl. fail-closed on unset GUC), `spend-cap.test.ts` (cap blocks after overflow). All integration tests gate on `DATABASE_URL_ADMIN` — CI without DB stays green.
+
+### 2026-04-18 (same day) — Manual Phase 1 items + Clerk template limitation
+
+Completed the dashboard-side work for Phase 1 exit:
+
+- **`DATABASE_URL_ADMIN`** — admin-role connection string minted via Neon MCP (`admin_user@ep-jolly-brook-a4tcj7ay-pooler`), pushed to Vercel Prod+Dev; Preview scope added via dashboard (CLI `git_branch_required` bug). `apps/web/.env.development.local` refreshed via `vercel env pull`. Integration tests now run against live Neon: **7/7 pass** (RLS cross-tenant isolation confirmed end-to-end).
+- **Paddle env scopes** — Prod+Preview paired, Dev separate; webhook secret scoped to all three.
+- **Clerk webhook secret** — real `whsec_…` on Prod+Dev+Preview. Endpoint registered in Clerk dashboard, subscribed to `user.created`/`user.deleted`/`email.created`.
+- **Clerk "Delivered by Clerk" toggles** — off for templates that expose it. Three templates (**Verification code**, **Reset password code**, **Invitation**) are greyed out on current Clerk plan — locked to Clerk-sender. Accepting for beta; TODO added for Phase 4 revisit (upgrade plan or drop email+password).
+- **Live DB sanity check via Neon MCP** — all 10 §3 tables present, `rls_enabled=rls_forced=true` on each, 10 policies match `0001_rls.sql`, roles `app_user`/`app_admin`/`admin_user`/`neondb_owner` present with correct `BYPASSRLS` attrs.
+
+Phase 1 exit criteria met (code-complete; deferrals documented). Blockers remaining are all Phase 2+ gated (Gateway BYOK passthrough, Workflow DevKit wrap) or plan-upgrade gated (Gateway ZDR, Clerk template lock).
+
+### 2026-04-18 (same day) — Phase 1 closeout pass
+
+Re-surveyed Phase 1 against the `clerk-webhooks`, `resend`, `ai-sdk`, and `vercel-functions` skills. Three small fixes:
+
+- **`apps/web/src/app/api/webhooks/clerk/route.ts`** — `email.created` branch now destructures `{ error }` from `resend.emails.send` (SDK returns structured errors; it never throws) and passes `idempotencyKey: clerk-email/${svix-id}` so Svix retries don't double-send. `text` is only forwarded when Clerk actually ships a `body_plain`.
+- **`apps/web/vercel.ts`** — dropped the `/api/cron/compact-mutations` cron. The sync route doesn't land until Phase 2; nightly 404s would have been misleading signal. Cron lands alongside the route it calls.
+- **`apps/web/src/app/api/ai/stream/route.ts`** — removed the `void response` no-op in `onFinish`. Observability already flows via Sentry + AI SDK's built-in span on the stream.
+- **§10 Phase 1 checklist** — `vercel.ts` and schema migrations bullets flipped from ☐ to ✅; they were complete but the plan hadn't caught up.
+
+### 2026-04-18 (same day) — Clerk skills review pass
+
+Re-aligned against `clerk-webhooks` + `clerk-nextjs-patterns` skills after load.
+
+- **Webhook handler refactor:** `/api/webhooks/clerk/route.ts` swapped raw `svix.Webhook` + manual header parsing → `verifyWebhook(req)` from `@clerk/nextjs/webhooks`. Auto-reads `CLERK_WEBHOOK_SECRET`; handler now takes `NextRequest`. Dropped `svix` from deps.
+- **Middleware → proxy:** `apps/web/middleware.ts` renamed to `apps/web/proxy.ts` per Next.js 16 convention. Same `clerkMiddleware` export + protected-route matcher; no behavior change. `/api/webhooks(.*)` remains implicitly public (not in `isProtectedRoute`).
+- **Tests:** 9/9 pass; typecheck clean.
+
+- **§10 Phase 1 checklist:** broken out per-vendor with status markers; status matches `docs/provisioning.md`. Original single-line "Provision: …" bullet preserved in spirit.
+- **New file:** `docs/provisioning.md` is the executable runbook. PLAN.md remains architectural; provisioning.md remains operational.
+
+## 2026-04-17 — Provisioning deviations (from `docs/provisioning.md`)
+
+Captured here so the narrative doesn't disappear into runbook-only history:
+
+### Auth & email delivery
+
+- **Clerk Custom SMTP removed from Clerk dashboard** (vendor change). Plan originally said "Clerk dashboard → Emails → Custom SMTP → point at Resend." As of 2026 Clerk no longer exposes SMTP fields.
+  - **New pattern:** per template, toggle "Delivered by Clerk" OFF → Clerk emits `email.created` webhook → our `/api/webhooks/clerk` handler sends via Resend SDK.
+  - **Implication for §5 Auth Flow:** add a webhook path; `CLERK_WEBHOOK_SECRET` env var (Svix-signed); handler also processes `user.created`/`user.deleted` for Postgres sync + GDPR cascade.
+- **Clerk JWT template — `sub` claim is reserved.** Plan §5's implied template `{ sub, email }` cannot override `sub`. Template emits `{ email }` only; middleware reads `sub = user.id` from Clerk's default claim set. Functionally identical.
+- **Resend Marketplace integration failed** (`"user does not have an active session or is not authenticated"` — root cause not diagnosed). Worked around by direct resend.com signup. Not a plan change — just a provisioning-path change.
+
+### Database
+
+- **`DATABASE_URL_ADMIN` cannot be minted from Neon dashboard/SQL Editor.** Both run every session under `SET ROLE app_user` (default applied to `neondb_owner`), which silently blocks `CREATE ROLE`/`ALTER ROLE`. Fix: run role setup from a Node script that executes `SET ROLE neondb_owner` first inside a single transaction.
+- **`BYPASSRLS` is a role attribute, not a privilege** — does NOT inherit through `GRANT`. The `ALTER ROLE admin_user SET ROLE app_admin` default is what makes BYPASSRLS effectively apply for `admin_user` sessions. Affects any future "privileged login role" work.
+- **Drizzle `neon-http` execute path broken in drizzle-orm 0.36** — `db.execute(sql\`...\`)` throws `"This function can now be called only as a tagged-template function"`. `/api/health` uses `@neondatabase/serverless` tagged-template `neon()` client directly. Revisit on drizzle upgrade; migrations still use drizzle-kit fine.
+
+### AI Gateway
+
+- **Model slug format uses dots, not hyphens.** `anthropic/claude-haiku-4.5` (not `claude-haiku-4-5`). Provider resolves to dated snapshot `claude-haiku-4-5-20251001` internally. Affects any place we hard-code model IDs — prefer Edge Config model registry (§1) for the canonical list.
+- **ZDR toggle not on Hobby plan** — see TODO above.
+
+### AWS KMS
+
+- **Correct provisioning order is IAM-user-first, then KEK** (plan originally implied reverse). KMS "Key users" picker needs the IAM user to exist; inline policy needs the KEK ARN.
+- **KMS key admins left empty** — default key policy's `arn:aws:iam::<acct>:root` grants full account-root admin, which is sufficient. Only add dedicated admins later if we create a separate admin IAM user.
+- **Region:** `us-east-1` (matches Neon). Initial key mistakenly created in `us-east-2` — scheduled for 7-day deletion (KMS minimum).
+
+### Sentry
+
+- **Org slug is `1scratch-llc`, not `1scratch`** — Sentry auto-appended the legal-entity suffix. JWT payload `"org":"1scratch-llc"` is authoritative.
+- **Organization auth tokens have fixed scopes** — scope editing disabled in UI. Default scopes (`project:releases` + `org:read`) are what `@sentry/nextjs` source-map upload needs.
+
+### Axiom
+
+- **Vendor integration changed** — no more `AXIOM_TOKEN` + `AXIOM_DATASET` pair. New pattern: single signed ingest endpoint `NEXT_PUBLIC_AXIOM_INGEST_ENDPOINT` (with `configurationId` + `projectId` embedded), scoped `type=web-vitals`. Functions/Edge logs ship via auto-configured Log Drain (no env var). Dataset defaults to `vercel` (plan said `1scratch-web` — cosmetic-only).
+- **Server-side Axiom queries** (not needed Phase 1) would require a separately-minted `AXIOM_TOKEN` in Axiom's own dashboard.
+
+### Vercel CLI quirks (env vars)
+
+- **`echo "..." | vercel env add` stores a trailing `\n`.** Caught after AWS SDK rejected `region="us-east-1\n"`. Always use `printf '%s' "value" | vercel env add …`. All previously-added `AI_GATEWAY_API_KEY` + `AWS_*` values were removed and re-added cleanly.
+- **`vercel env add NAME preview` returns `git_branch_required` JSON** even with `--value ... --yes`. Workaround: add Preview via dashboard (tick Prod + Preview when editing). Tracked under TODO above.
+- **Vercel rejects `--sensitive` on Development scope.** Vars like `RESEND_API_KEY`, `AWS_SECRET_ACCESS_KEY`, `SENTRY_AUTH_TOKEN` are Sensitive on Prod/Preview but non-Sensitive on Dev.
