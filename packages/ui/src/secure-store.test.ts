@@ -10,7 +10,7 @@ describe('secureStore', () => {
     invokeMock.mockResolvedValue({ value: 'hello' })
     const { secureStore } = await import('./secure-store')
     expect(await secureStore.get('k')).toBe('hello')
-    expect(invokeMock).toHaveBeenCalledWith('plugin:secure-store|get', { key: 'k' })
+    expect(invokeMock).toHaveBeenCalledWith('plugin:1scratch-secure-store|get', { key: 'k' })
   })
 
   it('get returns null when value is null', async () => {
@@ -23,7 +23,7 @@ describe('secureStore', () => {
     invokeMock.mockResolvedValue(undefined)
     const { secureStore } = await import('./secure-store')
     await secureStore.set('k', 'v')
-    expect(invokeMock).toHaveBeenCalledWith('plugin:secure-store|set', { key: 'k', value: 'v' })
+    expect(invokeMock).toHaveBeenCalledWith('plugin:1scratch-secure-store|set', { key: 'k', value: 'v' })
   })
 
   it('has unwraps { value: bool }', async () => {

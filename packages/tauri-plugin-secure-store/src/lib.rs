@@ -53,7 +53,7 @@ async fn has<R: Runtime>(_app: tauri::AppHandle<R>, args: GetArgs) -> Result<Has
 }
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    Builder::new("secure-store")
+    Builder::new("1scratch-secure-store")
         .invoke_handler(tauri::generate_handler![get, set, delete, has])
         .setup(|app, _api| {
             let _ = app;
