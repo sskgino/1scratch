@@ -298,3 +298,25 @@ export const billingEvents = pgTable(
   },
   (t) => [index('billing_events_user_idx').on(t.userId)],
 )
+
+// ─── Device sessions (mobile + desktop refresh tokens) ──────────────────────
+
+export const deviceSessions = pgTable(
+  'device_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    deviceId: text('device_id').notNull(),
+    deviceLabel: text('device_label'),
+    refreshHash: text('refresh_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('device_sessions_user_device_idx').on(t.userId, t.deviceId),
+    index('device_sessions_refresh_hash_active_idx').on(t.refreshHash),
+  ],
+)
