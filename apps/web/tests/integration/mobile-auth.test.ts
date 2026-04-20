@@ -92,4 +92,26 @@ d('mobile auth routes', () => {
     const res = await POST(new Request('https://x', { method: 'POST' }))
     expect(res.status).toBe(401)
   })
+
+  it('revoke marks row revoked; subsequent refresh fails', async () => {
+    const userId = await seedUser()
+    const { createSession } = await import('@/lib/mobile-sessions')
+    const s = await createSession({ userId, deviceId: 'dev-rev' })
+    const { POST: revoke } = await import('@/app/api/mobile/revoke/route')
+    const r1 = await revoke(
+      new Request('https://x', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${s.refreshToken}` },
+      }),
+    )
+    expect(r1.status).toBe(204)
+    const { POST: refresh } = await import('@/app/api/mobile/refresh/route')
+    const r2 = await refresh(
+      new Request('https://x', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${s.refreshToken}` },
+      }),
+    )
+    expect(r2.status).toBe(401)
+  })
 })
