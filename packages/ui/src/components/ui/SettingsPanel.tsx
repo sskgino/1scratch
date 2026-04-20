@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useSettingsStore, FONTS, DEFAULT_MODEL_SLOTS } from '../../store/settings'
 import { useWorkspaceStore } from '../../store/workspace'
-import { SyncDiagnostics } from '../SyncDiagnostics'
 
 interface Props {
   onClose: () => void
+  syncDiagnostics?: ReactNode
 }
 
 const KNOWN_MODELS = [
@@ -13,7 +13,7 @@ const KNOWN_MODELS = [
   'claude-haiku-4-5-20251001',
 ]
 
-export default function SettingsPanel({ onClose }: Props) {
+export default function SettingsPanel({ onClose, syncDiagnostics }: Props) {
   const { apiKey, setApiKey, modelSlots, setModelSlot, fontFamily, setFontFamily } = useSettingsStore()
   const colorsEnabled = useWorkspaceStore((s) => s.colorsEnabled)
   const setColorsEnabled = useWorkspaceStore((s) => s.setColorsEnabled)
@@ -155,7 +155,7 @@ export default function SettingsPanel({ onClose }: Props) {
           </button>
         </Section>
 
-        <SyncDiagnostics />
+        {syncDiagnostics}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
           <button onClick={onClose} style={{ ...btnStyle, background: 'rgba(0,0,0,0.05)', color: '#333' }}>Cancel</button>

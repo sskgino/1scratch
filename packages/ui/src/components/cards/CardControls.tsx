@@ -102,7 +102,7 @@ export default function CardControls({ card }: Props) {
             </div>
             <div style={{ fontSize: 10, color: '#aaa', marginTop: 4, fontFamily: 'system-ui' }}>
               {modelSlots[card.modelSlot]
-                ? modelSlots[card.modelSlot].replace('claude-', '').replace('-20251001', '')
+                ? modelSlots[card.modelSlot]!.replace('claude-', '').replace('-20251001', '')
                 : '(empty — configure in Settings)'}
             </div>
           </div>

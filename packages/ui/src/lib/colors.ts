@@ -45,7 +45,7 @@ export function nextSwatchId(usedIds: (string | null | undefined)[]): string {
     if (!id) continue
     counts.set(id, (counts.get(id) ?? 0) + 1)
   }
-  let best = PASTEL_PALETTE[0].id
+  let best = PASTEL_PALETTE[0]!.id
   let bestCount = counts.get(best) ?? 0
   for (const s of PASTEL_PALETTE) {
     const c = counts.get(s.id) ?? 0

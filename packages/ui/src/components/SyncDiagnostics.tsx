@@ -1,7 +1,10 @@
-import { useSync } from '../sync/sync-provider'
+export interface SyncDiagnosticsProps {
+  outboxDepth: number
+  lastError: string | null
+  triggerNow: () => void | Promise<void>
+}
 
-export function SyncDiagnostics() {
-  const { outboxDepth, lastError, triggerNow } = useSync()
+export function SyncDiagnostics({ outboxDepth, lastError, triggerNow }: SyncDiagnosticsProps) {
   return (
     <section style={{ padding: 12 }}>
       <h3>Sync</h3>

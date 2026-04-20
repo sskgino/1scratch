@@ -129,7 +129,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
         const tabs = sec.tabs.filter((t) => t.id !== tabId)
         let activeTabId = sec.activeTabId
         if (activeTabId === tabId) {
-          activeTabId = tabs.length > 0 ? tabs[tabs.length - 1].id : null
+          activeTabId = tabs.length > 0 ? tabs[tabs.length - 1]!.id : null
         }
         return { ...sec, tabs, activeTabId }
       }),
