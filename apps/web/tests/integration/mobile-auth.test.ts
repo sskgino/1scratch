@@ -63,4 +63,33 @@ d('mobile auth routes', () => {
     vi.doUnmock('@clerk/nextjs/server')
     vi.resetModules()
   })
+
+  it('refresh rotates the row; old refresh token rejected on re-use', async () => {
+    const userId = await seedUser()
+    const { createSession } = await import('@/lib/mobile-sessions')
+    const first = await createSession({ userId, deviceId: 'dev-rfr' })
+    const { POST } = await import('@/app/api/mobile/refresh/route')
+    const res1 = await POST(
+      new Request('https://x', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${first.refreshToken}` },
+      }),
+    )
+    expect(res1.status).toBe(200)
+    const body1 = (await res1.json()) as { refresh_token: string; access_jwt: string }
+    expect(body1.refresh_token).not.toBe(first.refreshToken)
+    const res2 = await POST(
+      new Request('https://x', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${first.refreshToken}` },
+      }),
+    )
+    expect(res2.status).toBe(401)
+  })
+
+  it('refresh without bearer returns 401', async () => {
+    const { POST } = await import('@/app/api/mobile/refresh/route')
+    const res = await POST(new Request('https://x', { method: 'POST' }))
+    expect(res.status).toBe(401)
+  })
 })
