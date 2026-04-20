@@ -295,6 +295,9 @@ importers:
       vite:
         specifier: ^7.0.4
         version: 7.3.2(@types/node@22.19.17)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.1)
 
 packages:
 
