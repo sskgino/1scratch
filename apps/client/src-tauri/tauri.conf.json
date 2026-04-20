@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "scratch",
   "version": "0.1.0",
-  "identifier": "com.gino.scratch",
+  "identifier": "ai.scratch.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -11,15 +11,9 @@
   },
   "app": {
     "windows": [
-      {
-        "title": "scratch",
-        "width": 800,
-        "height": 600
-      }
+      { "title": "scratch", "width": 800, "height": 600 }
     ],
-    "security": {
-      "csp": null
-    }
+    "security": { "csp": null }
   },
   "bundle": {
     "active": true,
@@ -31,5 +25,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "deep-link": {
+      "mobile": [{ "host": "app.1scratch.ai", "pathPrefix": ["/m"] }],
+      "desktop": { "schemes": ["1scratch"] }
+    }
   }
 }
