@@ -1,3 +1,14 @@
+## Default Permission
+
+Default permissions for secure-store: read/write/delete/has
+
+#### This default permission set includes the following:
+
+- `allow-get`
+- `allow-set`
+- `allow-delete`
+- `allow-has`
+
 ## Permission Table
 
 <table>

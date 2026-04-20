@@ -341,6 +341,12 @@
           "type": "string",
           "const": "deny-set",
           "markdownDescription": "Denies the set command without any pre-configured scope."
+        },
+        {
+          "description": "Default permissions for secure-store: read/write/delete/has\n#### This default permission set includes:\n\n- `allow-get`\n- `allow-set`\n- `allow-delete`\n- `allow-has`",
+          "type": "string",
+          "const": "default",
+          "markdownDescription": "Default permissions for secure-store: read/write/delete/has\n#### This default permission set includes:\n\n- `allow-get`\n- `allow-set`\n- `allow-delete`\n- `allow-has`"
         }
       ]
     }
