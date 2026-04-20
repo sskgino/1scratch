@@ -8,10 +8,10 @@
 // The workflow survives cold-starts and per-attempt retries; the request
 // itself stays open via the Readable piped from `run.getReadable()`.
 
-import { auth } from '@clerk/nextjs/server'
 import { start } from 'workflow/api'
 import { checkBotId } from 'botid/server'
 import { z } from 'zod'
+import { resolveAuthedUserId } from '@/lib/auth-resolver'
 import { checkCap } from '@/lib/spend-cap'
 import { aiStreamWorkflow } from '@/workflows/ai-stream'
 
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   const bot = await checkBotId()
   if (bot.isBot) return Response.json({ error: 'bot_detected' }, { status: 403 })
 
-  const { userId } = await auth()
+  const userId = await resolveAuthedUserId(req)
   if (!userId) return Response.json({ error: 'unauthenticated' }, { status: 401 })
 
   const parsed = BodySchema.safeParse(await req.json().catch(() => null))

@@ -1,15 +1,8 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
-const isProtectedRoute = createRouteMatcher([
-  '/app(.*)',
-  '/api/sync(.*)',
-  '/api/ai(.*)',
-  '/api/providers(.*)',
-  '/api/import(.*)',
-  '/api/account/delete-request',
-  '/api/account/delete-cancel',
-  '/api/audit-events(.*)',
-])
+// API routes self-gate via resolveAuthedUserId (bearer OR Clerk session).
+// Only web paths that require a Clerk session stay in the proxy matcher.
+const isProtectedRoute = createRouteMatcher(['/app(.*)', '/mobile(.*)'])
 
 export default clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {

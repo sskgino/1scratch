@@ -1,10 +1,10 @@
-import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import { resolveAuthedUserId } from '@/lib/auth-resolver'
 import { fetchSince } from '@/lib/sync/fetch-since'
 import { pullQuerySchema } from '@/lib/sync/validate'
 
 export async function GET(req: Request) {
-  const { userId } = await auth()
+  const userId = await resolveAuthedUserId(req)
   if (!userId) return new NextResponse('Unauthorized', { status: 401 })
 
   const url = new URL(req.url)

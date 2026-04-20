@@ -1,14 +1,14 @@
 // GET  /api/model-slots        — list all 10 slots (dense; empty slots returned as nulls)
 // PUT  /api/model-slots        — upsert one slot: { slot, providerConnectionId, modelId, displayLabel? }
 
-import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
+import { resolveAuthedUserId } from '@/lib/auth-resolver'
 import { listSlots, upsertSlot, SlotValidationError, SLOT_MIN, SLOT_MAX } from '@/lib/model-slots'
 
 export const runtime = 'nodejs'
 
-export async function GET() {
-  const { userId } = await auth()
+export async function GET(req: Request) {
+  const userId = await resolveAuthedUserId(req)
   if (!userId) return Response.json({ error: 'unauthenticated' }, { status: 401 })
   const slots = await listSlots(userId)
   return Response.json({ slots })
@@ -22,7 +22,7 @@ const PutSchema = z.object({
 })
 
 export async function PUT(req: Request) {
-  const { userId } = await auth()
+  const userId = await resolveAuthedUserId(req)
   if (!userId) return Response.json({ error: 'unauthenticated' }, { status: 401 })
   const parsed = PutSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
