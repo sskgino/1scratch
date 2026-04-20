@@ -1,16 +1,27 @@
 import { onOpenUrl, getCurrent } from '@tauri-apps/plugin-deep-link'
 
-const PREFIX = '1scratch://auth/done'
+// Desktop uses a custom scheme; mobile uses Android App Links / iOS Universal
+// Links under the canonical HTTPS host. Both are accepted — session.signIn
+// picks the appropriate return URL per platform.
+const DESKTOP_PREFIX = '1scratch://auth/done'
+const MOBILE_PREFIX = 'https://app.1scratch.ai/m/auth/done'
+
+function hasPrefix(raw: string, prefix: string): boolean {
+  return raw === prefix || raw.startsWith(prefix + '?') || raw.startsWith(prefix + '#')
+}
 
 function matches(raw: string): URL | null {
-  if (raw !== PREFIX && !raw.startsWith(PREFIX + '?') && !raw.startsWith(PREFIX + '#')) return null
-  try {
-    const u = new URL(raw.replace(/^1scratch:\/\//, 'https://'))
-    Object.defineProperty(u, 'toString', { value: () => raw })
-    return u
-  } catch {
-    return null
+  if (hasPrefix(raw, MOBILE_PREFIX)) {
+    try { return new URL(raw) } catch { return null }
   }
+  if (hasPrefix(raw, DESKTOP_PREFIX)) {
+    try {
+      const u = new URL(raw.replace(/^1scratch:\/\//, 'https://'))
+      Object.defineProperty(u, 'toString', { value: () => raw })
+      return u
+    } catch { return null }
+  }
+  return null
 }
 
 export async function getColdStartUrl(): Promise<URL | null> {

@@ -1,5 +1,13 @@
 import { open as shellOpen } from '@tauri-apps/plugin-shell'
+import { platform } from '@tauri-apps/plugin-os'
 import { loadSession, signIn, type Session } from '@1scratch/ui/auth/session'
+
+function authReturnUrl(): string {
+  const p = platform()
+  return p === 'android' || p === 'ios'
+    ? 'https://app.1scratch.ai/m/auth/done'
+    : '1scratch://auth/done'
+}
 
 let cached: Session | null = null
 
@@ -27,6 +35,7 @@ export async function signInInteractive(): Promise<Session> {
   const sess = await signIn({
     apiBase: apiBaseUrl(),
     webBase: webBaseUrl(),
+    returnUrl: authReturnUrl(),
     shellOpen: (u) => shellOpen(u),
   })
   cached = sess

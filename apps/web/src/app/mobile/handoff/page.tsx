@@ -5,7 +5,7 @@ import MobileHandoffClient from './MobileHandoffClient'
 
 export const dynamic = 'force-dynamic'
 
-const RETURN_RE = /^1scratch:\/\/auth\/done(\?|$)/
+const RETURN_RE = /^(1scratch:\/\/auth\/done|https:\/\/app\.1scratch\.ai\/m\/auth\/done)(\?|$)/
 
 export default async function MobileHandoffPage() {
   const { userId } = await auth()

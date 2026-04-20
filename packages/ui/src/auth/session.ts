@@ -37,12 +37,13 @@ export async function loadSession(opts: { apiBase: string }): Promise<Session | 
 export async function signIn(opts: {
   apiBase: string
   webBase: string
+  returnUrl: string
   shellOpen: (url: string) => Promise<void>
   deviceLabel?: string
 }): Promise<Session> {
   const deviceId = await ensureDeviceId()
   const params = new URLSearchParams({
-    return: '1scratch://auth/done',
+    return: opts.returnUrl,
     device_id: deviceId,
     device_label: opts.deviceLabel ?? 'Tauri client',
   })

@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 import { SignIn } from '@clerk/nextjs'
 import { clerkAppearance } from '@/lib/clerk-appearance'
 
-const RETURN_RE = /^1scratch:\/\/auth\/done(\?|$)/
+const RETURN_RE = /^(1scratch:\/\/auth\/done|https:\/\/app\.1scratch\.ai\/m\/auth\/done)(\?|$)/
 
 export default async function SignInPage({
   searchParams,

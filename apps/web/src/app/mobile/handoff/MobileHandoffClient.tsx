@@ -32,11 +32,12 @@ export default function MobileHandoffClient({ returnUrl, deviceId, deviceLabel }
         refresh_token: string
         access_exp: number
       }
-      const url = new URL(returnUrl)
-      url.searchParams.set('access', body.access_jwt)
-      url.searchParams.set('refresh', body.refresh_token)
-      url.searchParams.set('exp', String(body.access_exp))
-      window.location.replace(url.toString())
+      const qs = new URLSearchParams({
+        access: body.access_jwt,
+        refresh: body.refresh_token,
+        exp: String(body.access_exp),
+      }).toString()
+      window.location.replace(`${returnUrl}?${qs}`)
     })()
   }, [returnUrl, deviceId, deviceLabel])
   return (
