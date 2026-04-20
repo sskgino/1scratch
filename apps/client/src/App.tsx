@@ -1,7 +1,7 @@
-import Sidebar from './components/layout/Sidebar'
-import TabBar from './components/layout/TabBar'
-import Canvas from './components/Canvas/Canvas'
-import Toolbar from './components/ui/Toolbar'
+import Sidebar from '@1scratch/ui/components/layout/Sidebar'
+import TabBar from '@1scratch/ui/components/layout/TabBar'
+import Canvas from '@1scratch/ui/components/Canvas/Canvas'
+import Toolbar from '@1scratch/ui/components/ui/Toolbar'
 import { SyncProvider } from './sync/sync-provider'
 
 // Workspace id is stable per install; server creates one-workspace-per-user lazily.
