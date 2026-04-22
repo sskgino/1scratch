@@ -9,6 +9,7 @@ import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
+import org.json.JSONObject
 
 @InvokeArg
 class GetArgs { lateinit var key: String }
@@ -39,7 +40,7 @@ class SecureStorePlugin(private val activity: Activity) : Plugin(activity) {
         val args = invoke.parseArgs(GetArgs::class.java)
         val v = prefs.getString(args.key, null)
         val out = JSObject()
-        if (v != null) out.put("value", v) else out.put("value", JSObject.NULL)
+        if (v != null) out.put("value", v) else out.put("value", JSONObject.NULL)
         invoke.resolve(out)
     }
 

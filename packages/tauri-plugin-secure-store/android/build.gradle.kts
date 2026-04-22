@@ -15,7 +15,6 @@ android {
 }
 
 dependencies {
+  implementation(project(":tauri-android"))
   implementation("androidx.security:security-crypto:1.1.0-alpha06")
-  // The Tauri Android plugin scaffolding provides `app.tauri:tauri-android` via
-  // the parent project — included transitively when used inside `gen/android`.
 }
