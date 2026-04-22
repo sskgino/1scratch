@@ -17,6 +17,7 @@
     "test:integration": "vitest run tests/integration"
   },
   "dependencies": {
+    "@1scratch/memory": "workspace:*",
     "@1scratch/sync-proto": "workspace:*",
     "@1scratch/types": "workspace:*",
     "@ai-sdk/anthropic": "^2.0.0",
