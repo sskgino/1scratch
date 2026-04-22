@@ -1,4 +1,4 @@
-import { open as shellOpen } from '@tauri-apps/plugin-shell'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import { platform } from '@tauri-apps/plugin-os'
 import { loadSession, signIn, type Session } from '@1scratch/ui/auth/session'
 
@@ -36,7 +36,7 @@ export async function signInInteractive(): Promise<Session> {
     apiBase: apiBaseUrl(),
     webBase: webBaseUrl(),
     returnUrl: authReturnUrl(),
-    shellOpen: (u) => shellOpen(u),
+    shellOpen: (u) => openUrl(u),
   })
   cached = sess
   return sess

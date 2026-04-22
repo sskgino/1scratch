@@ -52,9 +52,9 @@ export async function signIn(opts: {
   const cold = await getColdStartUrl()
   let resolved: URL | null = cold
   if (!resolved) {
-    resolved = await new Promise<URL>((resolve) => {
+    resolved = await new Promise<URL>((resolve, reject) => {
       const stop = listenForAuthCallback((u) => { stop(); resolve(u) })
-      void opts.shellOpen(url)
+      opts.shellOpen(url).catch((e) => { stop(); reject(new Error(`shellOpen failed: ${String((e as Error)?.message ?? e)}`)) })
     })
   }
   const refresh = resolved.searchParams.get('refresh')

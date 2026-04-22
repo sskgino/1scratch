@@ -12,7 +12,7 @@
     "sql:allow-select",
     "deep-link:default",
     "deep-link:allow-get-current",
-    "shell:allow-open",
+    "opener:default",
     "os:allow-platform",
     "os:allow-version",
     "1scratch-secure-store:default"

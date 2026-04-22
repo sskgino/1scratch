@@ -30,6 +30,7 @@ export default function App() {
   const [signedIn, setSignedIn] = useState(false)
   const [busy, setBusy] = useState(true)
   const [err, setErr] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
   useEffect(() => {
     getAuthToken()
       .then(() => { setSignedIn(true); setBusy(false) })
@@ -54,15 +55,18 @@ export default function App() {
             }}
             onClick={async () => {
               setErr(null)
+              setPending(true)
               try {
                 await signInInteractive()
                 setSignedIn(true)
               } catch (e) {
                 setErr(String((e as Error)?.message ?? e))
+              } finally {
+                setPending(false)
               }
             }}
           >
-            Sign in
+            {pending ? 'Signing in…' : 'Sign in'}
           </button>
           {err ? <pre style={{ color: '#b91c1c', whiteSpace: 'pre-wrap', maxWidth: 360 }}>{err}</pre> : null}
         </div>
