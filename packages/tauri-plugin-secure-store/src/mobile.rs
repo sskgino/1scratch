@@ -1,19 +1,55 @@
-// Mobile dispatch is wired through Tauri's mobile plugin macros — the actual
-// JNI / Objective-C bridging is generated. These helpers delegate to the
-// installed plugin via the AppHandle. In Tauri 2.x mobile, the recommended
-// pattern is `app.secure_store().get(...)`. We use a thin handle accessor.
+use serde::{Deserialize, Serialize};
+use tauri::{plugin::PluginHandle, AppHandle, Manager, Runtime};
 
-use std::error::Error;
+pub struct SecureStoreHandle<R: Runtime>(pub PluginHandle<R>);
 
-pub async fn get(_key: &str) -> Result<Option<String>, Box<dyn Error + Send + Sync>> {
-    Err("secure-store mobile dispatch not yet bound — registered by app.handle()".into())
+#[derive(Serialize)]
+struct KeyArg<'a> { key: &'a str }
+#[derive(Serialize)]
+struct KeyValueArg<'a> { key: &'a str, value: &'a str }
+#[derive(Deserialize)]
+struct ValueResp { value: Option<String> }
+#[derive(Deserialize)]
+struct BoolResp { value: bool }
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("secure-store plugin handle not initialized")]
+    NotInit,
+    #[error("{0}")]
+    Plugin(String),
 }
-pub async fn set(_key: &str, _value: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
-    Err("secure-store mobile dispatch not yet bound".into())
+
+fn handle<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::State<'_, SecureStoreHandle<R>>, Error> {
+    app.try_state::<SecureStoreHandle<R>>().ok_or(Error::NotInit)
 }
-pub async fn delete(_key: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
-    Err("secure-store mobile dispatch not yet bound".into())
+
+pub async fn get<R: Runtime>(app: &AppHandle<R>, key: &str) -> Result<Option<String>, Error> {
+    let h = handle(app)?;
+    let resp: ValueResp = h.0
+        .run_mobile_plugin("get", KeyArg { key })
+        .map_err(|e| Error::Plugin(e.to_string()))?;
+    Ok(resp.value)
 }
-pub async fn has(_key: &str) -> Result<bool, Box<dyn Error + Send + Sync>> {
-    Err("secure-store mobile dispatch not yet bound".into())
+
+pub async fn set<R: Runtime>(app: &AppHandle<R>, key: &str, value: &str) -> Result<(), Error> {
+    let h = handle(app)?;
+    h.0.run_mobile_plugin::<()>("set", KeyValueArg { key, value })
+        .map_err(|e| Error::Plugin(e.to_string()))?;
+    Ok(())
+}
+
+pub async fn delete<R: Runtime>(app: &AppHandle<R>, key: &str) -> Result<(), Error> {
+    let h = handle(app)?;
+    h.0.run_mobile_plugin::<()>("delete", KeyArg { key })
+        .map_err(|e| Error::Plugin(e.to_string()))?;
+    Ok(())
+}
+
+pub async fn has<R: Runtime>(app: &AppHandle<R>, key: &str) -> Result<bool, Error> {
+    let h = handle(app)?;
+    let resp: BoolResp = h.0
+        .run_mobile_plugin("has", KeyArg { key })
+        .map_err(|e| Error::Plugin(e.to_string()))?;
+    Ok(resp.value)
 }

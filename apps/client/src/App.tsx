@@ -29,6 +29,7 @@ function Shell() {
 export default function App() {
   const [signedIn, setSignedIn] = useState(false)
   const [busy, setBusy] = useState(true)
+  const [err, setErr] = useState<string | null>(null)
   useEffect(() => {
     getAuthToken()
       .then(() => { setSignedIn(true); setBusy(false) })
@@ -37,10 +38,34 @@ export default function App() {
   if (busy) return <p style={{ padding: 24 }}>Loading…</p>
   if (!signedIn) {
     return (
-      <main style={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}>
-        <button onClick={async () => { await signInInteractive(); setSignedIn(true) }}>
-          Sign in
-        </button>
+      <main style={{ display: 'grid', placeItems: 'center', minHeight: '100vh', padding: 24 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
+          <button
+            style={{
+              padding: '14px 28px',
+              fontSize: 18,
+              fontWeight: 600,
+              background: '#2563eb',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              cursor: 'pointer',
+              minWidth: 200,
+            }}
+            onClick={async () => {
+              setErr(null)
+              try {
+                await signInInteractive()
+                setSignedIn(true)
+              } catch (e) {
+                setErr(String((e as Error)?.message ?? e))
+              }
+            }}
+          >
+            Sign in
+          </button>
+          {err ? <pre style={{ color: '#b91c1c', whiteSpace: 'pre-wrap', maxWidth: 360 }}>{err}</pre> : null}
+        </div>
       </main>
     )
   }
