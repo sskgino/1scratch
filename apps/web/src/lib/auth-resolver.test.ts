@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 
 beforeAll(() => {
+  delete process.env.MOBILE_JWT_KMS_KEY_ID
+  delete process.env.MOBILE_JWT_KMS_KEY_IDS
   process.env.MOBILE_JWT_SIGNING_KEY ??= Buffer.alloc(32, 3).toString('base64')
   process.env.MOBILE_JWT_ISS = 'https://app.1scratch.ai'
 })
