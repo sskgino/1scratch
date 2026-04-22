@@ -4,7 +4,8 @@ import TabBar from '@1scratch/ui/components/layout/TabBar'
 import Canvas from '@1scratch/ui/components/Canvas/Canvas'
 import Toolbar from '@1scratch/ui/components/ui/Toolbar'
 import { SyncProvider } from './sync/sync-provider'
-import { getAuthToken, signInInteractive } from './sync/auth-token'
+import { signOut } from '@1scratch/ui/auth/session'
+import { apiBaseUrl, clearAuthCache, getAuthToken, signInInteractive } from './sync/auth-token'
 
 const PLACEHOLDER_WORKSPACE_ID = '00000000-0000-0000-0000-000000000000'
 
@@ -43,5 +44,29 @@ export default function App() {
       </main>
     )
   }
-  return <Shell />
+  return (
+    <>
+      <button
+        style={{
+          position: 'fixed',
+          top: 8,
+          right: 8,
+          zIndex: 9999,
+          padding: '6px 10px',
+          fontSize: 12,
+        }}
+        onClick={async () => {
+          try {
+            await signOut({ apiBase: apiBaseUrl() })
+          } finally {
+            clearAuthCache()
+            setSignedIn(false)
+          }
+        }}
+      >
+        Sign out
+      </button>
+      <Shell />
+    </>
+  )
 }
