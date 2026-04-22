@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ai.scratch.app",
+      "sha256_cert_fingerprints": [
+        "B7:33:83:3C:01:DC:0A:B0:2E:ED:B5:BE:EA:A0:A4:09:C2:47:7A:7A:64:CC:16:93:67:3F:50:0F:1C:43:8B:32"
+      ]
+    }
+  }
+]
