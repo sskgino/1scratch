@@ -19,6 +19,8 @@ import {
   uniqueIndex,
   index,
   pgEnum,
+  real,
+  unique,
 } from 'drizzle-orm/pg-core'
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
@@ -48,6 +50,11 @@ export const users = pgTable('users', {
   tier: tier('tier').notNull().default('free'),
   // Per-day AI cap in cents — defaults to $2 for free tier (PLAN.md §10).
   dailyAiCapCents: integer('daily_ai_cap_cents').notNull().default(200),
+  memoryEmbeddingModelId: text('memory_embedding_model_id'),
+  memoryEmbeddingProvider: text('memory_embedding_provider'),
+  memoryInjectionPolicy: jsonb('memory_injection_policy').notNull().default(sql`'{"format":"system-message","token_budget":2000,"top_k":8}'::jsonb`),
+  memoryItemCount: integer('memory_item_count').notNull().default(0),
+  memoryBytesCount: bigint('memory_bytes_count', { mode: 'number' }).notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
@@ -235,6 +242,7 @@ export const aiUsage = pgTable(
     inputTokens: integer('input_tokens').notNull().default(0),
     outputTokens: integer('output_tokens').notNull().default(0),
     costMicros: bigint('cost_micros', { mode: 'bigint' }).notNull(),  // 1 cent = 10_000 micros
+    kind: text('kind').notNull().default('completion'),
     cardId: uuid('card_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -297,4 +305,84 @@ export const billingEvents = pgTable(
     receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('billing_events_user_idx').on(t.userId)],
+)
+
+// ─── Memory M1a (Phase 4) ────────────────────────────────────────────────────
+
+export const memoryItems = pgTable(
+  'memory_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    scopeKind: text('scope_kind').notNull(),
+    scopeRefId: uuid('scope_ref_id'),
+    sourceKind: text('source_kind').notNull(),
+    sourceRefId: uuid('source_ref_id'),
+    text: text('text').notNull(),
+    tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
+    metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+    tier: text('tier').notNull().default('long'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('memory_items_user_scope_idx').on(t.userId, t.scopeKind, t.scopeRefId),
+    index('memory_items_source_idx').on(t.userId, t.sourceKind, t.sourceRefId),
+  ],
+)
+
+export const memoryVectors = pgTable('memory_vectors', {
+  memoryItemId: uuid('memory_item_id').notNull().references(() => memoryItems.id, { onDelete: 'cascade' }),
+  embeddingModelId: text('embedding_model_id').notNull(),
+  dim: integer('dim').notNull(),
+  // Stored as pgvector; Drizzle sees text for cross-dim tolerance (see plan T9).
+  embedding: text('embedding'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.memoryItemId, t.embeddingModelId] }),
+])
+
+export const memoryEdges = pgTable('memory_edges', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  fromItemId: uuid('from_item_id').notNull().references(() => memoryItems.id, { onDelete: 'cascade' }),
+  toItemId: uuid('to_item_id').notNull().references(() => memoryItems.id, { onDelete: 'cascade' }),
+  rel: text('rel').notNull(),
+  weight: real('weight').notNull().default(1),
+  metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const memoryFacts = pgTable('memory_facts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  scopeKind: text('scope_kind').notNull(),
+  scopeRefId: uuid('scope_ref_id'),
+  subject: text('subject').notNull(),
+  predicate: text('predicate').notNull(),
+  object: jsonb('object').notNull(),
+  sourceItemId: uuid('source_item_id').references(() => memoryItems.id, { onDelete: 'set null' }),
+  confidence: real('confidence').notNull().default(1),
+  tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const memoryStrategyConfig = pgTable(
+  'memory_strategy_config',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    scopeKind: text('scope_kind').notNull(),
+    scopeRefId: uuid('scope_ref_id'),
+    strategy: text('strategy').notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    weight: real('weight').notNull().default(1),
+    params: jsonb('params').notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique('memory_strategy_config_uniq').on(t.userId, t.scopeKind, t.scopeRefId, t.strategy),
+  ],
 )
