@@ -1,5 +1,8 @@
 const COMMANDS: &[&str] = &["get", "set", "delete", "has"];
 
 fn main() {
-    tauri_plugin::Builder::new(COMMANDS).build();
+    tauri_plugin::Builder::new(COMMANDS)
+        .android_path("android")
+        .ios_path("ios")
+        .build();
 }
