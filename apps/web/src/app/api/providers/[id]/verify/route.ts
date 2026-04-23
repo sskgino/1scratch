@@ -4,8 +4,8 @@
 // The cached 24h verification the PLAN mentions is implicit: the client
 // decides when to call /verify (slot picker re-verifies if stale).
 
-import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
+import { resolveAuthedUserId } from '@/lib/auth-resolver'
 import { loadDecryptedKey, loadConnectionMeta, markVerified } from '@/lib/providers'
 import { verifyProvider } from '@/lib/verifiers'
 import { modelsByProvider } from '@/lib/model-registry'
@@ -16,10 +16,10 @@ export const maxDuration = 15
 const IdSchema = z.string().uuid()
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { userId } = await auth()
+  const userId = await resolveAuthedUserId(req)
   if (!userId) return Response.json({ error: 'unauthenticated' }, { status: 401 })
 
   const { id } = await params

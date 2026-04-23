@@ -3,8 +3,9 @@
 // The 24-hr cool-off clock starts on confirm, not on request — so a user who
 // never clicks the email never loses data.
 
-import { auth, currentUser } from '@clerk/nextjs/server'
+import { currentUser } from '@clerk/nextjs/server'
 import { Resend } from 'resend'
+import { resolveAuthedUserId } from '@/lib/auth-resolver'
 import { requestDeletion, DeletionError } from '@/lib/account-deletion'
 import { record } from '@/lib/audit-events'
 
@@ -15,7 +16,7 @@ function appOrigin(): string {
 }
 
 export async function POST(req: Request) {
-  const { userId } = await auth()
+  const userId = await resolveAuthedUserId(req)
   if (!userId) return Response.json({ error: 'unauthenticated' }, { status: 401 })
 
   const user = await currentUser()

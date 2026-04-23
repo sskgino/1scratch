@@ -1,7 +1,7 @@
 // One-shot on app boot: read local SQLite into Zustand.
 import type { TauriSqliteStore } from './tauri-sqlite-store'
-import { useCardsStore, type Card as UiCard } from '../store/cards'
-import { useWorkspaceStore, type Section, type Tab } from '../store/workspace'
+import { useCardsStore, type Card as UiCard } from '@1scratch/ui/store/cards'
+import { useWorkspaceStore, type Section, type Tab } from '@1scratch/ui/store/workspace'
 
 export async function hydrateFromStore(store: TauriSqliteStore, workspaceId: string): Promise<void> {
   const [sections, canvases, cards] = await Promise.all([

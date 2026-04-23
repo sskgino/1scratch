@@ -6,7 +6,7 @@ import { openSyncDb, type TauriSqliteStore } from './tauri-sqlite-store'
 import { hydrateFromStore } from './hydrate'
 import { migrateLegacyZustand } from './migrate-zustand'
 import { apiBaseUrl, getAuthToken } from './auth-token'
-import { useCardsStore } from '../store/cards'
+import { useCardsStore } from '@1scratch/ui/store/cards'
 
 interface SyncContextValue {
   outboxDepth: number

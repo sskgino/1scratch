@@ -1,15 +1,15 @@
 // DELETE /api/model-slots/:slot — clear a slot row (slot itself remains addressable; next PUT recreates it).
 
-import { auth } from '@clerk/nextjs/server'
+import { resolveAuthedUserId } from '@/lib/auth-resolver'
 import { clearSlot, SlotValidationError } from '@/lib/model-slots'
 
 export const runtime = 'nodejs'
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ slot: string }> },
 ) {
-  const { userId } = await auth()
+  const userId = await resolveAuthedUserId(req)
   if (!userId) return Response.json({ error: 'unauthenticated' }, { status: 401 })
   const { slot } = await params
   const n = Number.parseInt(slot, 10)

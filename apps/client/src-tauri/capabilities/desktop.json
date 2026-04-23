@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop",
+  "description": "Desktop window capabilities",
+  "platforms": ["macOS", "linux", "windows"],
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "sql:default",
+    "sql:allow-load",
+    "sql:allow-execute",
+    "sql:allow-select",
+    "deep-link:default",
+    "shell:allow-open",
+    "1scratch-secure-store:default"
+  ]
+}

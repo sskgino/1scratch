@@ -1,8 +1,8 @@
 // DELETE /api/providers/:id — remove a BYOK connection. Model slots
 // referencing this connection are set to NULL via ON DELETE SET NULL.
 
-import { auth } from '@clerk/nextjs/server'
 import { z } from 'zod'
+import { resolveAuthedUserId } from '@/lib/auth-resolver'
 import { deleteConnection } from '@/lib/providers'
 import { record } from '@/lib/audit-events'
 
@@ -14,7 +14,7 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { userId } = await auth()
+  const userId = await resolveAuthedUserId(req)
   if (!userId) return Response.json({ error: 'unauthenticated' }, { status: 401 })
   const { id } = await params
   const parsed = IdSchema.safeParse(id)

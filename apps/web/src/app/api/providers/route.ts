@@ -1,9 +1,9 @@
 // POST /api/providers — save a BYOK API key for the authed user.
 // GET  /api/providers — list the authed user's connections (public shape only).
 
-import { auth } from '@clerk/nextjs/server'
 import { checkBotId } from 'botid/server'
 import { z } from 'zod'
+import { resolveAuthedUserId } from '@/lib/auth-resolver'
 import { listConnections, saveApiKey } from '@/lib/providers'
 import { record } from '@/lib/audit-events'
 
@@ -31,8 +31,8 @@ const BodySchema = z
     { message: 'ollama requires endpointUrl; others require apiKey' },
   )
 
-export async function GET() {
-  const { userId } = await auth()
+export async function GET(req: Request) {
+  const userId = await resolveAuthedUserId(req)
   if (!userId) return Response.json({ error: 'unauthenticated' }, { status: 401 })
   const connections = await listConnections(userId)
   return Response.json({ connections })
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   const bot = await checkBotId()
   if (bot.isBot) return Response.json({ error: 'bot_detected' }, { status: 403 })
 
-  const { userId } = await auth()
+  const userId = await resolveAuthedUserId(req)
   if (!userId) return Response.json({ error: 'unauthenticated' }, { status: 401 })
 
   const parsed = BodySchema.safeParse(await req.json().catch(() => null))

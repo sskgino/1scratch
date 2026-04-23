@@ -1,0 +1,20 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Capabilities for iOS and Android",
+  "platforms": ["iOS", "android"],
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "sql:default",
+    "sql:allow-load",
+    "sql:allow-execute",
+    "sql:allow-select",
+    "deep-link:default",
+    "deep-link:allow-get-current",
+    "opener:default",
+    "os:allow-platform",
+    "os:allow-version",
+    "1scratch-secure-store:default"
+  ]
+}

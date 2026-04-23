@@ -17,6 +17,9 @@ export type AuthEventKind =
   | 'account_delete_executed'
   | 'scratch_imported'
   | 'oauth_connected'
+  | 'mobile_session_created'
+  | 'mobile_session_refreshed'
+  | 'mobile_session_revoked'
 
 export interface AuthEventRow {
   id: string

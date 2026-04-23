@@ -3,7 +3,7 @@
 // for shape. Cap body at 5 MB so a malicious/corrupt upload can't DOS the
 // parser.
 
-import { auth } from '@clerk/nextjs/server'
+import { resolveAuthedUserId } from '@/lib/auth-resolver'
 import { importScratchFile, ScratchFileSchema, ImportError } from '@/lib/import-scratch'
 import { record } from '@/lib/audit-events'
 
@@ -12,7 +12,7 @@ export const runtime = 'nodejs'
 const MAX_BYTES = 5 * 1024 * 1024
 
 export async function POST(req: Request) {
-  const { userId } = await auth()
+  const userId = await resolveAuthedUserId(req)
   if (!userId) return Response.json({ error: 'unauthenticated' }, { status: 401 })
 
   const contentLength = Number(req.headers.get('content-length') ?? 0)

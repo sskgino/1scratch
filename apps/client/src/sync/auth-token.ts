@@ -1,16 +1,71 @@
-// Desktop-side Clerk JWT retrieval.
-//
-// Phase 2 proof-of-life: read a token from `VITE_DEV_CLERK_TOKEN` if set (local
-// dev), otherwise throw. Proper Clerk sign-in on desktop lands later in Phase 2
-// step 1 (client swap is already in the web workbench; desktop Clerk session
-// integration coordinates separately).
-export async function getAuthToken(): Promise<string> {
-  const dev = (import.meta as unknown as { env: Record<string, string> }).env?.VITE_DEV_CLERK_TOKEN
-  if (dev) return dev
-  throw new Error('No auth token configured — set VITE_DEV_CLERK_TOKEN or wire Clerk session')
+import { openUrl } from '@tauri-apps/plugin-opener'
+import { loadSession, signIn, type Session } from '@1scratch/ui/auth/session'
+
+const DEFAULT_APP_BASE = 'https://app.1scratch.ai'
+
+function isLoopback(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1'
 }
+
+function isVercelPreview(hostname: string): boolean {
+  return hostname.endsWith('.vercel.app')
+}
+
+function normalizeBaseUrl(raw: string | undefined, allowedHosts: readonly string[]): string {
+  if (!raw) return DEFAULT_APP_BASE
+  try {
+    const url = new URL(raw)
+    if (url.protocol !== 'https:' && !isLoopback(url.hostname)) return DEFAULT_APP_BASE
+    const hostOk =
+      allowedHosts.includes(url.hostname) || isLoopback(url.hostname) || isVercelPreview(url.hostname)
+    if (!hostOk) return DEFAULT_APP_BASE
+    url.pathname = ''
+    url.search = ''
+    url.hash = ''
+    return url.toString().replace(/\/$/, '')
+  } catch {
+    return DEFAULT_APP_BASE
+  }
+}
+
+function authReturnUrl(): string {
+  // Always point to the canonical production host so the Android App
+  // Link intent-filter (only verified for app.1scratch.ai) can intercept.
+  // Preview hosts are used for the sign-in / handoff hops only.
+  return 'https://app.1scratch.ai/m/auth/done'
+}
+
+let cached: Session | null = null
 
 export function apiBaseUrl(): string {
   const url = (import.meta as unknown as { env: Record<string, string> }).env?.VITE_API_BASE_URL
-  return url ?? 'https://app.1scratch.ai'
+  return normalizeBaseUrl(url, ['app.1scratch.ai', 'api.1scratch.ai'])
 }
+
+export function webBaseUrl(): string {
+  const url = (import.meta as unknown as { env: Record<string, string> }).env?.VITE_WEB_BASE_URL
+  return normalizeBaseUrl(url, ['app.1scratch.ai'])
+}
+
+export async function getAuthToken(): Promise<string> {
+  if (cached) return cached.access
+  const sess = await loadSession({ apiBase: apiBaseUrl() })
+  if (sess) {
+    cached = sess
+    return sess.access
+  }
+  throw new Error('not_signed_in')
+}
+
+export async function signInInteractive(): Promise<Session> {
+  const sess = await signIn({
+    apiBase: apiBaseUrl(),
+    webBase: webBaseUrl(),
+    returnUrl: authReturnUrl(),
+    shellOpen: (u) => openUrl(u),
+  })
+  cached = sess
+  return sess
+}
+
+export function clearAuthCache(): void { cached = null }
