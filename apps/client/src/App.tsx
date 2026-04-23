@@ -116,11 +116,16 @@ export default function App() {
       <button
         style={{
           position: 'fixed',
-          top: 8,
-          right: 8,
+          top: 'max(env(safe-area-inset-top, 0px), 64px)',
+          right: 12,
           zIndex: 9999,
-          padding: '6px 10px',
-          fontSize: 12,
+          padding: '10px 16px',
+          fontSize: 14,
+          background: '#dc2626',
+          color: '#fff',
+          border: 'none',
+          borderRadius: 8,
+          fontWeight: 600,
         }}
         onClick={async () => {
           try {

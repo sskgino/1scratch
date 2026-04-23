@@ -690,6 +690,53 @@ Items that are known-needed but blocked on something external (plan upgrade, app
 
 Running ledger of in-flight changes to the plan as we actually build. Each entry: date, section affected, what changed, why. Append newest at the top. When an amendment supersedes an original plan decision, note the old assumption so future-us doesn't get confused re-reading the earlier sections.
 
+## 2026-04-19 → 2026-04-23 — Phase 3a: mobile foundation (Android-first)
+
+Scoped pass: PLAN §10 Phase 3 step 1 (Tauri Mobile project setup, shared `src/`)
+plus the mobile-side prerequisites: secure storage, deep-link OAuth callback,
+and own-token auth so `/api/sync/*` can be reached over a refreshable bearer.
+Apple Developer enrollment blocked → iOS slice is skeleton-only.
+
+Spec: `docs/superpowers/specs/2026-04-19-phase3a-mobile-foundation-design.md`
+Plan: `docs/superpowers/plans/2026-04-19-phase3a-mobile-foundation.md`
+
+**Shipped (Tasks 1-29 + DoD-driven fixes):**
+- `packages/ui/` — extracted from `apps/client/src/{components,lib,store}` so future mobile/web consumers reuse the canvas + cards + auth helpers without duplication.
+- `packages/tauri-plugin-secure-store/` — Android `EncryptedSharedPreferences` (AES-256-GCM via Jetpack Security MasterKey), iOS Keychain (Swift, skeleton — Apple gate), desktop keyring fallback, single JS API (`secureStore.{get,set,delete,has}`).
+- Migration `0003_device_sessions.sql` + Drizzle types + RLS. Composite unique on `(user_id, device_id)` so re-sign-in rotates in place.
+- `MOBILE_JWT_SIGNING_KEY` HS256 access JWT (15 min) + 30-day refresh token rotated on use; `device_sessions` table; `/api/mobile/{init,exchange,refresh,revoke}`.
+- `resolveAuthedUserId()` swap across all self-gating routes; `proxy.ts` matcher relaxed to `/app(.*)` + `/mobile(.*)` so API routes self-gate via bearer-or-Clerk.
+- `/sign-in?return=…` cookie flow + `/mobile/handoff` browser-handoff page that exchanges via Clerk session and bridges to `/m/auth/done?access=…&refresh=…`.
+- Tauri Android init committed (`src-tauri/gen/android`); deep-link, opener, shell plugins wired; `tauri.conf.json` identifier → `ai.scratch.app`.
+
+**Real-device DoD on Pixel 9 Pro XL — passed steps 1-4, 6, 7. Step 5 sync-via-UI deferred (see below).**
+
+**DoD-driven bug fixes — each one was a real failure on the device, found via adb logcat or Vercel runtime logs while attempting Task 30 steps 3-7:**
+- `apps/web/src/proxy.ts` + `apps/web/src/lib/cors-mobile.ts`: Tauri Android WebView origin is `http://tauri.localhost`; CORS preflight on `POST /api/mobile/refresh` (and `/api/sync/*`) returned 204 with no `Access-Control-Allow-Origin`, so the WebView blocked the rotation fetch and `consume()` swallowed the failure into a sign-in loop. Middleware now whitelists the three Tauri origins and short-circuits OPTIONS.
+- `apps/client/src-tauri/gen/android/app/src/main/AndroidManifest.xml`: deep-link `pathPrefix="/m"` was a string-prefix match — it also matched `/mobile/handoff?__clerk_handshake=…` and yanked the user out of Chrome mid-Clerk-handshake into the app with an unfinished URL. Tightened to `/m/`. Same fix in `tauri.conf.json` so future regeneration preserves it.
+- `AndroidManifest.xml`: added `android:allowBackup="false"` after Auto Backup restored stale `EncryptedSharedPreferences` ciphertext onto a freshly-generated MasterKey, surfacing as `javax.crypto.AEADBadTagException` on first read after reinstall. `SecureStorePlugin.kt` also wraps prefs init/read in a try/catch that wipes the file and retries with a fresh key — defense in depth for keystore resets.
+- `apps/web/src/app/api/mobile/exchange/route.ts`: `device_sessions_user_id_fkey` violated when the Clerk webhook hadn't fired for an existing user (signed up pre-webhook configuration). Lazy-provision the `users` row via Clerk `currentUser()` before `createSession` — idempotent on conflict.
+- **Vercel `CLERK_SECRET_KEY`** was literally the masked-display string `••••…` (50 × U+2022 bullets). Server logs surfaced it as `unable to resolve handshake: TypeError: Cannot convert argument to a ByteString because the character at index 7 has a value of 8226`. User rotated to the real `sk_test_…` from the Clerk dashboard.
+- `packages/ui/src/auth/session.ts` + `apps/client/src/App.tsx`: refresh-token race. Previously, the App boot listener and `signIn()` itself BOTH consumed the deep-link URL — App rotated `r1→r2` server-side, then `signIn()` overwrote `r2` in the keystore with the now-revoked `r1`. Plus React strict-mode/Vite-HMR remount replayed the cold-start consume across mounts. Fixes: (a) `signIn()` only opens the system browser, never touches the keystore; the App listener is the sole writer; (b) module-level `coldStartConsumed` flag + per-URL dedupe set on the App side; (c) `loadSession` body wrapped in a module-level in-flight promise so concurrent callers (sync loop + App boot) share the single rotation instead of racing 3 POSTs and self-poisoning the keystore on the second 401.
+
+**DoD results:**
+- ✅ Step 1: `adb devices` — Pixel 9 Pro XL.
+- ✅ Step 2: `pnpm android:dev` — Gradle build + streamed install via `adb install`.
+- ✅ Step 3: Sign-in: tap → Chrome Custom Tab → `/api/mobile/init` → Clerk Google OAuth → `/mobile/handoff` → `/api/mobile/exchange` → `/m/auth/done` → App Link intent → workbench renders.
+- ✅ Step 4: `adb shell run-as ai.scratch.app cat shared_prefs/scratch_secure.xml` — only ciphertext (base64 AES-GCM blobs); no readable refresh.
+- ⏸️ Step 5: sync round-trip from the workbench. The auth/CORS path was verified end-to-end via `/api/mobile/refresh` POSTs visible in Vercel logs, but card creation requires touch UX that hasn't been wired (Phase 3b scope). Deferring the prompt-typed-shows-in-Neon assertion to Phase 3b after touch interactions land.
+- ✅ Step 6: swipe-from-recents + relaunch → no sign-in prompt; workbench renders directly via `loadSession` → rotated refresh.
+- ✅ Step 7: red Sign-out button revokes server-side; `device_sessions.revoked_at` populated; client returns to sign-in screen.
+
+**Deferred to 3a-ios-finish (Apple unblocks):**
+- iOS init from macOS, Apple Sign-In wiring, TestFlight, Privacy Manifest.
+
+**Deferred to 3b/3c:**
+- Touch UX (3b) — workbench layout overflows status bar; cards aren't creatable on touch; sign-out button kept on top-right with `safe-area-inset-top` for now.
+- Foreground sync triggers + sync-via-touch verification (3b).
+- Push infra (3c), Play Console / store metadata (3c), App Links assetlinks.json hash for the prod release keystore (currently only the AGP debug keystore SHA256 is verified; release-channel metadata pending Play Console enrollment).
+- Production Clerk instance: prod still uses the `optimum-roughy-33.clerk.accounts.dev` dev FAPI. The handshake works through Custom Tab on the dev instance; promote to a prod instance under `clerk.1scratch.ai` before public sign-ups.
+
 ## 2026-04-18 (later) — Phase 2 step 2: sync v1 (desktop)
 
 Scoped pass: PLAN §10 Phase 2 step 2. Design: `docs/superpowers/specs/2026-04-18-sync-v1-design.md`; plan: `docs/superpowers/plans/2026-04-18-sync-v1.md`.
