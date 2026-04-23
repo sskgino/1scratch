@@ -24,7 +24,7 @@
     "@ai-sdk/openai": "^2.0.0",
     "@ai-sdk/openai-compatible": "^2.0.41",
     "@aws-sdk/client-kms": "^3.700.0",
-    "@clerk/nextjs": "^7.0.0",
+    "@clerk/nextjs": "^7.2.5",
     "@neondatabase/serverless": "^1.0.0",
     "@sentry/nextjs": "^10.49.0",
     "@workflow/ai": "^4.1.2",
