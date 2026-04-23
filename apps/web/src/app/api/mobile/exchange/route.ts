@@ -34,11 +34,16 @@ export async function POST(req: Request): Promise<Response> {
     ua: req.headers.get('user-agent'),
   })
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     access_jwt: session.accessToken,
     access_exp: session.accessExp,
     refresh_token: session.refreshToken,
     refresh_exp: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
     user: { id: session.userId },
   })
+  const clear = { httpOnly: true, sameSite: 'lax' as const, path: '/', maxAge: 0 }
+  res.cookies.set('mobile_return', '', clear)
+  res.cookies.set('mobile_device_id', '', clear)
+  res.cookies.set('mobile_device_label', '', clear)
+  return res
 }

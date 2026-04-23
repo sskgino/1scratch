@@ -47,14 +47,15 @@ export async function signIn(opts: {
     device_id: deviceId,
     device_label: opts.deviceLabel ?? 'Tauri client',
   })
-  const url = `${opts.apiBase}/api/mobile/init?${params.toString()}`
+  const url = new URL('/api/mobile/init', opts.webBase)
+  url.search = params.toString()
 
   const cold = await getColdStartUrl()
   let resolved: URL | null = cold
   if (!resolved) {
     resolved = await new Promise<URL>((resolve, reject) => {
       const stop = listenForAuthCallback((u) => { stop(); resolve(u) })
-      opts.shellOpen(url).catch((e) => { stop(); reject(new Error(`shellOpen failed: ${String((e as Error)?.message ?? e)}`)) })
+      opts.shellOpen(url.toString()).catch((e) => { stop(); reject(new Error(`shellOpen failed: ${String((e as Error)?.message ?? e)}`)) })
     })
   }
   const refresh = resolved.searchParams.get('refresh')

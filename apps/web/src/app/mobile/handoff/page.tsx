@@ -15,8 +15,5 @@ export default async function MobileHandoffPage() {
   if (!ret || !RETURN_RE.test(ret)) redirect('/app')
   const deviceId = jar.get('mobile_device_id')?.value
   const deviceLabel = jar.get('mobile_device_label')?.value
-  jar.delete('mobile_return')
-  jar.delete('mobile_device_id')
-  jar.delete('mobile_device_label')
   return <MobileHandoffClient returnUrl={ret} deviceId={deviceId ?? null} deviceLabel={deviceLabel ?? null} />
 }

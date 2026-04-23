@@ -34,13 +34,24 @@ export async function getColdStartUrl(): Promise<URL | null> {
 }
 
 export function listenForAuthCallback(handler: (url: URL) => void): () => void {
-  const stop = onOpenUrl((urls) => {
+  let stop: (() => void) | null = null
+  let cancelled = false
+  const ready = onOpenUrl((urls) => {
     for (const raw of urls) {
       const m = matches(raw)
       if (m) handler(m)
     }
   })
-  let cancelled = false
-  void stop.then?.((fn) => { if (cancelled) fn?.() })
-  return () => { cancelled = true }
+  void Promise.resolve(ready).then((fn) => {
+    stop = fn ?? null
+    if (cancelled) {
+      stop?.()
+      stop = null
+    }
+  })
+  return () => {
+    cancelled = true
+    stop?.()
+    stop = null
+  }
 }
