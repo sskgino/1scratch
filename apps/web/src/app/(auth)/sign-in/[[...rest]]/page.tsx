@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { cookies } from 'next/headers'
 import { SignIn } from '@clerk/nextjs'
 import { clerkAppearance } from '@/lib/clerk-appearance'
 
@@ -11,7 +12,9 @@ export default async function SignInPage({
 }) {
   const params = await searchParams
   const ret = params.return
-  const mobile = !!(ret && RETURN_RE.test(ret))
+  const jar = await cookies()
+  const cookieReturn = jar.get('mobile_return')?.value
+  const mobile = !!((ret && RETURN_RE.test(ret)) || (cookieReturn && RETURN_RE.test(cookieReturn)))
   return (
     <>
       <div className="mb-6 flex items-center justify-between">
