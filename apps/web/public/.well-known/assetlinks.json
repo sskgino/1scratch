@@ -5,7 +5,8 @@
       "namespace": "android_app",
       "package_name": "ai.scratch.app",
       "sha256_cert_fingerprints": [
-        "2A:B8:E5:DB:CF:35:34:2C:DE:F2:59:AF:F6:58:D1:FC:43:A5:D1:4C:D2:38:00:3E:7F:4D:E2:B3:B1:B6:7A:58"
+        "2A:B8:E5:DB:CF:35:34:2C:DE:F2:59:AF:F6:58:D1:FC:43:A5:D1:4C:D2:38:00:3E:7F:4D:E2:B3:B1:B6:7A:58",
+        "B7:33:83:3C:01:DC:0A:B0:2E:ED:B5:BE:EA:A0:A4:09:C2:47:7A:7A:64:CC:16:93:67:3F:50:0F:1C:43:8B:32"
       ]
     }
   }
