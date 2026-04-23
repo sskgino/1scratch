@@ -1,6 +1,7 @@
 package app.scratch.securestore
 
 import android.app.Activity
+import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import app.tauri.annotation.Command
@@ -10,6 +11,8 @@ import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import org.json.JSONObject
+
+private const val PREFS_FILE = "scratch_secure"
 
 @InvokeArg
 class GetArgs { lateinit var key: String }
@@ -22,23 +25,48 @@ class SetArgs {
 
 @TauriPlugin
 class SecureStorePlugin(private val activity: Activity) : Plugin(activity) {
-    private val prefs by lazy {
+    private var _prefs: SharedPreferences? = null
+    private val prefs: SharedPreferences get() = _prefs ?: openPrefs().also { _prefs = it }
+
+    private fun openPrefs(): SharedPreferences {
         val mk = MasterKey.Builder(activity)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
-        EncryptedSharedPreferences.create(
-            activity,
-            "scratch_secure",
-            mk,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+        return try {
+            EncryptedSharedPreferences.create(
+                activity,
+                PREFS_FILE,
+                mk,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+            )
+        } catch (e: Exception) {
+            // Ciphertext authenticated with a key that no longer exists (keystore
+            // reset, auto-backup restore after reinstall, etc.). Wipe the file and
+            // retry with a fresh key — the prior session is unrecoverable anyway.
+            activity.deleteSharedPreferences(PREFS_FILE)
+            EncryptedSharedPreferences.create(
+                activity,
+                PREFS_FILE,
+                mk,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+            )
+        }
+    }
+
+    private inline fun <T> withPrefs(op: (SharedPreferences) -> T): T = try {
+        op(prefs)
+    } catch (e: Exception) {
+        _prefs = null
+        activity.deleteSharedPreferences(PREFS_FILE)
+        op(prefs)
     }
 
     @Command
     fun get(invoke: Invoke) {
         val args = invoke.parseArgs(GetArgs::class.java)
-        val v = prefs.getString(args.key, null)
+        val v = withPrefs { it.getString(args.key, null) }
         val out = JSObject()
         if (v != null) out.put("value", v) else out.put("value", JSONObject.NULL)
         invoke.resolve(out)
@@ -47,20 +75,20 @@ class SecureStorePlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun set(invoke: Invoke) {
         val args = invoke.parseArgs(SetArgs::class.java)
-        prefs.edit().putString(args.key, args.value).apply()
+        withPrefs { it.edit().putString(args.key, args.value).apply() }
         invoke.resolve()
     }
 
     @Command
     fun delete(invoke: Invoke) {
         val args = invoke.parseArgs(GetArgs::class.java)
-        prefs.edit().remove(args.key).apply()
+        withPrefs { it.edit().remove(args.key).apply() }
         invoke.resolve()
     }
 
     @Command
     fun has(invoke: Invoke) {
         val args = invoke.parseArgs(GetArgs::class.java)
-        invoke.resolve(JSObject().put("value", prefs.contains(args.key)))
+        invoke.resolve(JSObject().put("value", withPrefs { it.contains(args.key) }))
     }
 }

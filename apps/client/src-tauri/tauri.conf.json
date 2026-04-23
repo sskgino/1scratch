@@ -28,7 +28,7 @@
   },
   "plugins": {
     "deep-link": {
-      "mobile": [{ "host": "app.1scratch.ai", "pathPrefix": ["/m"] }],
+      "mobile": [{ "host": "app.1scratch.ai", "pathPrefix": ["/m/"] }],
       "desktop": { "schemes": ["1scratch"] }
     }
   }
