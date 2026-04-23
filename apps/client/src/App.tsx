@@ -5,6 +5,8 @@ import Canvas from '@1scratch/ui/components/Canvas/Canvas'
 import Toolbar from '@1scratch/ui/components/ui/Toolbar'
 import { SyncProvider } from './sync/sync-provider'
 import { signOut } from '@1scratch/ui/auth/session'
+import { getColdStartUrl, listenForAuthCallback } from '@1scratch/ui/auth/deep-link'
+import { secureStore } from '@1scratch/ui/secure-store'
 import { apiBaseUrl, clearAuthCache, getAuthToken, signInInteractive } from './sync/auth-token'
 
 const PLACEHOLDER_WORKSPACE_ID = '00000000-0000-0000-0000-000000000000'
@@ -32,9 +34,31 @@ export default function App() {
   const [err, setErr] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   useEffect(() => {
-    getAuthToken()
-      .then(() => { setSignedIn(true); setBusy(false) })
-      .catch(() => setBusy(false))
+    let active = true
+    const consume = async (u: URL) => {
+      const r = u.searchParams.get('refresh')
+      if (r) await secureStore.set('refresh', r)
+      clearAuthCache()
+      try {
+        await getAuthToken()
+        if (active) setSignedIn(true)
+      } catch {
+        // fall through
+      }
+    }
+    const stop = listenForAuthCallback((u) => { void consume(u) })
+    void (async () => {
+      const cold = await getColdStartUrl()
+      if (cold) await consume(cold)
+      try {
+        await getAuthToken()
+        if (active) setSignedIn(true)
+      } catch {
+        // not signed in
+      }
+      if (active) setBusy(false)
+    })()
+    return () => { active = false; stop() }
   }, [])
   if (busy) return <p style={{ padding: 24 }}>Loading…</p>
   if (!signedIn) {
