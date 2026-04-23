@@ -29,7 +29,15 @@ d('mobile auth routes', () => {
 
   it('exchange issues access + refresh, audit row written', async () => {
     const userId = await seedUser()
-    vi.doMock('@clerk/nextjs/server', () => ({ auth: async () => ({ userId }) }))
+    vi.doMock('@clerk/nextjs/server', () => ({
+      auth: async () => ({ userId }),
+      currentUser: async () => ({
+        emailAddresses: [{ id: 'a', emailAddress: `${userId}@test.local` }],
+        primaryEmailAddressId: 'a',
+        firstName: null,
+        lastName: null,
+      }),
+    }))
     vi.resetModules()
     const { POST } = await import('@/app/api/mobile/exchange/route')
     const req = new Request('https://x/api/mobile/exchange', {

@@ -1,8 +1,9 @@
-import { auth } from '@clerk/nextjs/server'
+import { auth, currentUser } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createSession } from '@/lib/mobile-sessions'
 import { recordAdmin } from '@/lib/audit-events'
+import { sqlAdmin } from '@/db/rls'
 
 const bodySchema = z.object({
   device_id: z.string().min(8).max(64),
@@ -23,6 +24,22 @@ export async function POST(req: Request): Promise<Response> {
       { status: 400 },
     )
   }
+
+  // Lazy-provision the users row. The Clerk webhook usually does this on
+  // user.created, but pre-webhook users (or a missed delivery) leave the
+  // device_sessions FK with no target. Idempotent on conflict.
+  const user = await currentUser()
+  const email =
+    user?.emailAddresses.find((e) => e.id === user.primaryEmailAddressId)
+      ?.emailAddress ?? user?.emailAddresses[0]?.emailAddress
+  if (!email) return new NextResponse('user_email_missing', { status: 422 })
+  const displayName =
+    [user?.firstName, user?.lastName].filter(Boolean).join(' ') || null
+  await sqlAdmin()`
+    INSERT INTO users (id, email, display_name)
+    VALUES (${userId}, ${email}, ${displayName})
+    ON CONFLICT (id) DO NOTHING
+  `
 
   const session = await createSession({
     userId,
