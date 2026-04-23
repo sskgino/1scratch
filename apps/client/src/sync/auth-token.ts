@@ -29,7 +29,10 @@ function normalizeBaseUrl(raw: string | undefined, allowedHosts: readonly string
 }
 
 function authReturnUrl(): string {
-  return new URL('/m/auth/done', webBaseUrl()).toString()
+  // Always point to the canonical production host so the Android App
+  // Link intent-filter (only verified for app.1scratch.ai) can intercept.
+  // Preview hosts are used for the sign-in / handoff hops only.
+  return 'https://app.1scratch.ai/m/auth/done'
 }
 
 let cached: Session | null = null
