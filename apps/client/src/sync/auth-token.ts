@@ -57,15 +57,12 @@ export async function getAuthToken(): Promise<string> {
   throw new Error('not_signed_in')
 }
 
-export async function signInInteractive(): Promise<Session> {
-  const sess = await signIn({
-    apiBase: apiBaseUrl(),
+export async function signInInteractive(): Promise<void> {
+  await signIn({
     webBase: webBaseUrl(),
     returnUrl: authReturnUrl(),
     shellOpen: (u) => openUrl(u),
   })
-  cached = sess
-  return sess
 }
 
 export function clearAuthCache(): void { cached = null }

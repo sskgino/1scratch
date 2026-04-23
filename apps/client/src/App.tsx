@@ -46,7 +46,7 @@ export default function App() {
         // fall through
       }
     }
-    const stop = listenForAuthCallback((u) => { void consume(u) })
+    const stop = listenForAuthCallback((u) => { void consume(u).then(() => { if (active) setPending(false) }) })
     void (async () => {
       const cold = await getColdStartUrl()
       if (cold) await consume(cold)
@@ -82,10 +82,11 @@ export default function App() {
               setPending(true)
               try {
                 await signInInteractive()
-                setSignedIn(true)
+                // signedIn flips when the deep-link listener consumes the
+                // callback URL. Don't set it here — that would create a
+                // second writer racing the listener.
               } catch (e) {
                 setErr(String((e as Error)?.message ?? e))
-              } finally {
                 setPending(false)
               }
             }}

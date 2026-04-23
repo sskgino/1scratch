@@ -1,5 +1,4 @@
 import { secureStore } from '../secure-store'
-import { listenForAuthCallback, getColdStartUrl } from './deep-link'
 
 export interface Session { access: string; userId: string }
 
@@ -34,13 +33,18 @@ export async function loadSession(opts: { apiBase: string }): Promise<Session | 
   return { access: body.access_jwt, userId: body.user.id }
 }
 
+// Opens the system browser for the Clerk sign-in flow. Does NOT wait for the
+// deep-link return — the caller (App boot) registers a single listener that
+// consumes the callback URL and persists the refresh token. Two writers were
+// racing: this function and the App listener both saved the URL's refresh,
+// but App's loadSession() rotated it server-side first, so signIn's later
+// write clobbered the freshly-rotated token with the now-revoked one.
 export async function signIn(opts: {
-  apiBase: string
   webBase: string
   returnUrl: string
   shellOpen: (url: string) => Promise<void>
   deviceLabel?: string
-}): Promise<Session> {
+}): Promise<void> {
   const deviceId = await ensureDeviceId()
   const params = new URLSearchParams({
     return: opts.returnUrl,
@@ -49,21 +53,7 @@ export async function signIn(opts: {
   })
   const url = new URL('/api/mobile/init', opts.webBase)
   url.search = params.toString()
-
-  const cold = await getColdStartUrl()
-  let resolved: URL | null = cold
-  if (!resolved) {
-    resolved = await new Promise<URL>((resolve, reject) => {
-      const stop = listenForAuthCallback((u) => { stop(); resolve(u) })
-      opts.shellOpen(url.toString()).catch((e) => { stop(); reject(new Error(`shellOpen failed: ${String((e as Error)?.message ?? e)}`)) })
-    })
-  }
-  const refresh = resolved.searchParams.get('refresh')
-  const access = resolved.searchParams.get('access')
-  if (!refresh || !access) throw new Error('deep-link missing refresh/access params')
-  await secureStore.set('refresh', refresh)
-  const sub = JSON.parse(atob(access.split('.')[1] ?? '{}')).sub as string
-  return { access, userId: sub }
+  await opts.shellOpen(url.toString())
 }
 
 export async function signOut(opts: { apiBase: string }): Promise<void> {
