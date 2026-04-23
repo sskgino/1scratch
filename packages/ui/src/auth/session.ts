@@ -16,21 +16,38 @@ export async function ensureDeviceId(): Promise<string> {
   return id
 }
 
+// Concurrent loadSession callers (React strict-mode double-mount, sync loop
+// boot, App boot effect, etc.) all read the same refresh token, race three
+// POSTs to /api/mobile/refresh, and the server revokes-then-rotates serially:
+// the first wins with r2, the second sees r1 already revoked → 401 →
+// secureStore.delete('refresh'). Subsequent remounts find nothing stored
+// and bounce the user back to the sign-in screen. Serialize via in-flight
+// promise so all concurrent callers share the single rotation.
+let inflight: Promise<Session | null> | null = null
+
 export async function loadSession(opts: { apiBase: string }): Promise<Session | null> {
-  const refresh = await secureStore.get('refresh')
-  if (!refresh) return null
-  const res = await fetch(`${opts.apiBase}/api/mobile/refresh`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${refresh}` },
-  })
-  if (res.status === 401) {
-    await secureStore.delete('refresh')
-    return null
-  }
-  if (!res.ok) throw new Error(`refresh failed (${res.status})`)
-  const body = (await res.json()) as ExchangeResponse
-  await secureStore.set('refresh', body.refresh_token)
-  return { access: body.access_jwt, userId: body.user.id }
+  if (inflight) return inflight
+  inflight = (async () => {
+    try {
+      const refresh = await secureStore.get('refresh')
+      if (!refresh) return null
+      const res = await fetch(`${opts.apiBase}/api/mobile/refresh`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${refresh}` },
+      })
+      if (res.status === 401) {
+        await secureStore.delete('refresh')
+        return null
+      }
+      if (!res.ok) throw new Error(`refresh failed (${res.status})`)
+      const body = (await res.json()) as ExchangeResponse
+      await secureStore.set('refresh', body.refresh_token)
+      return { access: body.access_jwt, userId: body.user.id }
+    } finally {
+      inflight = null
+    }
+  })()
+  return inflight
 }
 
 // Opens the system browser for the Clerk sign-in flow. Does NOT wait for the

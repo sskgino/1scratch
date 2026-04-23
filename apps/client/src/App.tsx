@@ -11,6 +11,13 @@ import { apiBaseUrl, clearAuthCache, getAuthToken, signInInteractive } from './s
 
 const PLACEHOLDER_WORKSPACE_ID = '00000000-0000-0000-0000-000000000000'
 
+// Module-level lock so React strict mode / Vite HMR remounts can't replay
+// the cold-start URL — it's the same URL each time, but its refresh token
+// has been rotated server-side after the first consume, and a re-save would
+// overwrite the rotated token with the now-revoked original.
+let coldStartConsumed = false
+const consumedDeepLinks = new Set<string>()
+
 function Shell() {
   return (
     <SyncProvider workspaceId={PLACEHOLDER_WORKSPACE_ID}>
@@ -36,6 +43,9 @@ export default function App() {
   useEffect(() => {
     let active = true
     const consume = async (u: URL) => {
+      const key = u.toString()
+      if (consumedDeepLinks.has(key)) return
+      consumedDeepLinks.add(key)
       const r = u.searchParams.get('refresh')
       if (r) await secureStore.set('refresh', r)
       clearAuthCache()
@@ -48,8 +58,11 @@ export default function App() {
     }
     const stop = listenForAuthCallback((u) => { void consume(u).then(() => { if (active) setPending(false) }) })
     void (async () => {
-      const cold = await getColdStartUrl()
-      if (cold) await consume(cold)
+      if (!coldStartConsumed) {
+        coldStartConsumed = true
+        const cold = await getColdStartUrl()
+        if (cold) await consume(cold)
+      }
       try {
         await getAuthToken()
         if (active) setSignedIn(true)
