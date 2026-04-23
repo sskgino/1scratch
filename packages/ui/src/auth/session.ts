@@ -47,7 +47,7 @@ export async function signIn(opts: {
     device_id: deviceId,
     device_label: opts.deviceLabel ?? 'Tauri client',
   })
-  const url = `${opts.webBase}/sign-in?${params.toString()}`
+  const url = `${opts.apiBase}/api/mobile/init?${params.toString()}`
 
   const cold = await getColdStartUrl()
   let resolved: URL | null = cold

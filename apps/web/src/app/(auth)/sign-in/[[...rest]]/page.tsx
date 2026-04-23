@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { cookies } from 'next/headers'
 import { SignIn } from '@clerk/nextjs'
 import { clerkAppearance } from '@/lib/clerk-appearance'
 
@@ -8,37 +7,11 @@ const RETURN_RE = /^(1scratch:\/\/auth\/done|https:\/\/app\.1scratch\.ai\/m\/aut
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ return?: string; device_id?: string; device_label?: string }>
+  searchParams: Promise<{ return?: string }>
 }) {
   const params = await searchParams
   const ret = params.return
-  let mobile = false
-  if (ret && RETURN_RE.test(ret)) {
-    const jar = await cookies()
-    jar.set('mobile_return', ret, {
-      httpOnly: true,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 600,
-    })
-    if (params.device_id) {
-      jar.set('mobile_device_id', params.device_id, {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 600,
-      })
-    }
-    if (params.device_label) {
-      jar.set('mobile_device_label', params.device_label, {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 600,
-      })
-    }
-    mobile = true
-  }
+  const mobile = !!(ret && RETURN_RE.test(ret))
   return (
     <>
       <div className="mb-6 flex items-center justify-between">
