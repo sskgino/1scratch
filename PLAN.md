@@ -428,6 +428,16 @@ This is the screen the user described — 9 pill buttons (slots 0-9), click to a
 - Data Safety section filled honestly
 - Internal testing track from week 6, closed beta week 10
 
+**Mobile auth gotchas (learned the hard way during the Phase 3a Pixel DoD — see Build Log 2026-04-19→23 for full traces):**
+- **Tauri Android WebView origin = `http://tauri.localhost`** (not file://, not the asset domain). API routes the app fetches cross-origin MUST send `Access-Control-Allow-Origin` for that exact value or the WebView blocks the preflight silently. macOS/iOS desktop is `tauri://localhost`; Windows is `{http|https}://tauri.localhost` per `useHttpsScheme`.
+- **Android App Link `pathPrefix` is a string-prefix match, not a path-segment match.** `/m` matches `/mobile/handoff`, `/manage`, `/m123`, etc. Always include the trailing slash (`/m/`) so the intent filter doesn't yank the user out of mid-flow OAuth handshake URLs.
+- **`android:allowBackup` defaults to true.** Auto Backup will restore old `EncryptedSharedPreferences` ciphertext onto a freshly-generated MasterKey after reinstall, surfacing as `javax.crypto.AEADBadTagException`. Set `allowBackup="false"` for any app that uses keystore-encrypted prefs, AND defensively wrap reads in a try/catch that wipes-and-retries.
+- **Vercel CLI displays sensitive env values as `••••…` (U+2022 bullets).** Don't paste that masked string back as the actual value — Vercel will store the bullets as the literal secret. The Clerk handshake error `TypeError: Cannot convert argument to a ByteString because the character at index 7 has a value of 8226` is the canonical symptom.
+- **Clerk webhooks aren't a hard dependency.** The `device_sessions_user_id_fkey` will fire if a user signed up before the webhook was wired (or if Svix dropped the delivery). Lazy-provision the `users` row in any handler that's the first authed touch-point — `currentUser()` from Clerk + `INSERT … ON CONFLICT (id) DO NOTHING`.
+- **Deep-link callbacks fire multiple times across React strict-mode/Vite-HMR remounts.** A naive `consume(url)` will re-save the URL's refresh token AFTER the server has rotated it, overwriting the fresh token with a now-revoked one. Single-writer the keystore: only the App boot listener consumes; `signIn()` only opens the browser. Add module-level dedupe (`coldStartConsumed` flag + per-URL set) and serialize concurrent `loadSession` calls via an in-flight promise so the boot effect and sync loop share one rotation instead of racing.
+- **Chrome Custom Tab same-origin navigation does NOT trigger Android App Link intents.** A `window.location.replace('https://app.example.com/...')` from a page already on `app.example.com` stays in the Custom Tab. Cross-origin redirects work fine. We bridge through a separate `/m/auth/done` page that's NOT same-origin from the prior step in our flow, so this hasn't bitten us — but it'll matter for any future "exchange and bounce within the app domain" pattern.
+- **Dev Clerk instances (`*.accounts.dev`) work for prod but with caveats:** session cookies on `.accounts.dev` (third-party for our app domain), Clerk-sender email visible to users (we can't override on dev tier), no custom branding on hosted forms. Promote to a prod instance under `clerk.<own-domain>` before public sign-ups.
+
 ---
 
 ## 9. Free vs Paid
