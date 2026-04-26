@@ -25,10 +25,12 @@ export interface Card extends BaseCard {
 interface CardsState {
   cards: Record<string, Card>
   maxZIndex: number
+  selectedCardId: string | null
   addCard: (card: Omit<Card, 'id' | 'createdAt' | 'zIndex'>) => string
   updateCard: (id: string, patch: Partial<Card>) => void
   removeCard: (id: string) => void
   bringToFront: (id: string) => void
+  setSelectedCard: (id: string | null) => void
   clearAll: () => void
   loadCards: (cards: Record<string, Card>) => void
 }
@@ -36,6 +38,7 @@ interface CardsState {
 export const useCardsStore = create<CardsState>((set, get) => ({
   cards: {},
   maxZIndex: 0,
+  selectedCardId: null,
 
   addCard: (cardData) => {
     const id = crypto.randomUUID()
@@ -58,7 +61,7 @@ export const useCardsStore = create<CardsState>((set, get) => ({
     set((s) => {
       const next = { ...s.cards }
       delete next[id]
-      return { cards: next }
+      return { cards: next, selectedCardId: s.selectedCardId === id ? null : s.selectedCardId }
     })
   },
 
@@ -71,7 +74,9 @@ export const useCardsStore = create<CardsState>((set, get) => ({
     })
   },
 
-  clearAll: () => set({ cards: {}, maxZIndex: 0 }),
+  setSelectedCard: (id) => set({ selectedCardId: id }),
+
+  clearAll: () => set({ cards: {}, maxZIndex: 0, selectedCardId: null }),
 
   loadCards: (cards) => {
     const maxZ = Object.values(cards).reduce((m, c) => Math.max(m, c.zIndex), 0)
