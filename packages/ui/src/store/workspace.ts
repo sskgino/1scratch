@@ -6,6 +6,7 @@ export interface Tab {
   name: string
   sectionId: string
   color?: string | null  // swatch id from PASTEL_PALETTE, or 'none' / null
+  lastTouchedAt?: number
 }
 
 export interface Section {
@@ -111,7 +112,7 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
   addTab: (sectionId, name) => {
     const tabId = crypto.randomUUID()
     const usedColors = get().sections.flatMap((s) => s.tabs.map((t) => t.color))
-    const tab: Tab = { id: tabId, name, sectionId, color: nextSwatchId(usedColors) }
+    const tab: Tab = { id: tabId, name, sectionId, color: nextSwatchId(usedColors), lastTouchedAt: Date.now() }
     set((s) => ({
       sections: s.sections.map((sec) =>
         sec.id === sectionId
@@ -152,9 +153,13 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
   },
 
   setActiveTab: (sectionId, tabId) => {
+    const now = Date.now()
     set((s) => ({
+      activeSectionId: sectionId,
       sections: s.sections.map((sec) =>
-        sec.id === sectionId ? { ...sec, activeTabId: tabId } : sec,
+        sec.id === sectionId
+          ? { ...sec, activeTabId: tabId, tabs: sec.tabs.map((t) => t.id === tabId ? { ...t, lastTouchedAt: now } : t) }
+          : sec,
       ),
     }))
   },
