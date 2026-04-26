@@ -19,4 +19,14 @@ describe('BottomSheet', () => {
     fireEvent.click(screen.getByTestId('bottom-sheet-backdrop'))
     expect(onDismiss).toHaveBeenCalled()
   })
+
+  it('dismisses when dragged down past threshold', () => {
+    const onDismiss = vi.fn()
+    render(<BottomSheet open onDismiss={onDismiss}><p>x</p></BottomSheet>)
+    const handle = screen.getByTestId('bottom-sheet-handle')
+    fireEvent.pointerDown(handle, { clientY: 0, pointerId: 1 })
+    fireEvent.pointerMove(handle, { clientY: 250, pointerId: 1 })
+    fireEvent.pointerUp(handle,   { clientY: 250, pointerId: 1 })
+    expect(onDismiss).toHaveBeenCalled()
+  })
 })
