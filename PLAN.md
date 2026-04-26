@@ -700,6 +700,36 @@ Items that are known-needed but blocked on something external (plan upgrade, app
 
 Running ledger of in-flight changes to the plan as we actually build. Each entry: date, section affected, what changed, why. Append newest at the top. When an amendment supersedes an original plan decision, note the old assumption so future-us doesn't get confused re-reading the earlier sections.
 
+## 2026-04-25 → 2026-04-26 — Phase 3b PR 1: mobile foundations (viewport seam, primitives, hooks, haptics)
+
+Scoped pass: PLAN §10 Phase 3 step 2 — touch-UX foundations. Spec: `docs/superpowers/specs/2026-04-25-phase3b-mobile-touch-ux-design.md`. Plan: `docs/superpowers/plans/2026-04-25-phase3b-mobile-touch-ux.md` (PR 1 of 6).
+
+**Shipped (Tasks 1.0–1.17):**
+- Test infra: jsdom + `@testing-library/react` + `PointerEvent` polyfill + `ResizeObserver`/`IntersectionObserver` stubs in `packages/ui/src/test-setup.ts`. 39 tests across 13 files green.
+- Hooks: `useViewport` (visualViewport + safe-area probe + `isMobile` < 600pt), `useNetwork` (Tauri `network-change` + web `online`/`offline` fallback), `useHaptics` (gated by `hapticsEnabled` + `reduceMotion`), `useShareIntent` (cold-start + runtime parse for `1scratch://capture` and `1scratch://share`).
+- Stores: new `mobileNav` (tab + sheet stack + localStorage tab persistence). `settings` extended with `hapticsEnabled` (default true), `reduceMotion`, `spatialOnMobile`, `clipboardSuggestEnabled`.
+- Shared primitives under `packages/ui/src/components/mobile/shared/`: `SafeArea`, `BottomSheet` (open/close + backdrop dismiss + drag-to-dismiss with 30% threshold + focus trap), `SwipeActions` (64pt threshold), `PullToRefresh`, `SyncBanner` (4 states; final wiring deferred to PR 6), `TabSwitcherSheet`.
+- Layout: `BottomTabBar` (4-tab nav with light haptic on switch + safe-area-bottom), `MobileShell` skeleton (header + tab-routed main + tab bar). Barrel exports added to `packages/ui/src/index.ts`.
+- Render seam in `apps/client/src/App.tsx`: new `ResponsiveShell` toggles via `hidden` between desktop `Shell` and `MobileShell` based on `useViewport().isMobile`. `SyncProvider` hoisted out of `Shell` so it mounts once around `ResponsiveShell` and survives the toggle (preserves sync loop + zustand subscriptions across resize).
+- Rust mobile commands: `mobile_haptic`, `mobile_status_bar`, `mobile_network_probe` (in `apps/client/src-tauri/src/commands/`); `core:event:default/allow-emit/allow-listen` capabilities added to `mobile.json`.
+- Android Kotlin: `MobileHapticPlugin` registered via `MainActivity.registerPlugin()`; three-tier SDK guard (`minSdk = 24`): API 24-25 falls back to deprecated `vibrate(durationMs)`, API 26-28 uses `createOneShot/createWaveform`, API 29+ uses `createPredefined(EFFECT_TICK/EFFECT_CLICK)`.
+
+**Plan deviations (production-driven):**
+- `useShareIntent` listens via new `lib/share-intent-link.ts` instead of importing `auth/deep-link.ts` — the existing `matches()` filter only surfaces auth URLs, so re-import would silently drop capture/share intents at runtime (mocked tests would still have passed). Both modules co-subscribe via Tauri's `listen()` which supports independent subscribers.
+- `mobile_haptic.rs` Android branch uses `PluginApi::register_android_plugin` + managed `PluginHandle` state (Tauri 2.10.3 actual API) instead of the plan's `app.android_plugin_handle()` (does not exist in this version).
+- `MobileHapticPlugin.kt` adds three-tier SDK guard so the plugin works on `minSdk = 24` rather than crashing on API <29.
+- `useViewport` test wraps the resize assertion in `waitFor` because the rAF batch does not flush synchronously inside `act` in this jsdom/vitest combo. Plan's task 1.1 anticipated this.
+- Race-guard pattern (mounted/cancelled flag on dynamic-import resolution) applied to `useNetwork` and `useShareIntent` — without it, an unmount-before-import-resolves leaks the Tauri listener.
+
+**Deferred to PR 2-6 of Phase 3b:**
+- PR 2: `PointerDraggable`/`PointerResizable` shim + `react-rnd` removal in `CardShell`.
+- PR 3: Quick Capture (composer + voice + camera + clipboard + ImageCard kind + MobileSignIn).
+- PR 4: Library + You + FTS5 search (SQLite migration `0002_fts.sql`).
+- PR 5: Canvas Stack + Spatial views + `MobileCanvas`.
+- PR 6: Sync resilience (`persistOnEveryMutation`, `network-change` kick, per-card sync state, tab-badge dot, status-bar theming) + Pixel device runbook (DoD).
+
+**Real-device DoD: not yet attempted in PR 1.** Foundations are scaffolding only — UI is placeholder `<h1>` per tab. Pixel runbook lands in PR 6.
+
 ## 2026-04-19 → 2026-04-23 — Phase 3a: mobile foundation (Android-first)
 
 Scoped pass: PLAN §10 Phase 3 step 1 (Tauri Mobile project setup, shared `src/`)

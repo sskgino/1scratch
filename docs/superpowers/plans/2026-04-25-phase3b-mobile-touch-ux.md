@@ -110,13 +110,13 @@ src/store/mobileNav.ts (+ test)
 - Modify: `packages/ui/vitest.config.ts`
 - Create: `packages/ui/src/test-setup.ts`
 
-- [ ] **Step 1: Add devDeps**
+- [x] **Step 1: Add devDeps**
 
 ```bash
 pnpm --filter @1scratch/ui add -D jsdom@^25 @testing-library/react@^16 @testing-library/dom@^10 @testing-library/jest-dom@^6 @testing-library/user-event@^14
 ```
 
-- [ ] **Step 2: Update vitest config**
+- [x] **Step 2: Update vitest config**
 
 Replace `packages/ui/vitest.config.ts`:
 
@@ -131,7 +131,7 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 3: Create test setup**
+- [x] **Step 3: Create test setup**
 
 `packages/ui/src/test-setup.ts`:
 
@@ -152,7 +152,7 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
 }
 ```
 
-- [ ] **Step 4: Verify existing tests still green**
+- [x] **Step 4: Verify existing tests still green**
 
 ```bash
 pnpm --filter @1scratch/ui test
@@ -160,7 +160,7 @@ pnpm --filter @1scratch/ui test
 
 Expected: existing `secure-store.test.ts` passes under jsdom.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/ui/package.json packages/ui/vitest.config.ts packages/ui/src/test-setup.ts pnpm-lock.yaml
@@ -175,7 +175,7 @@ git commit -m "test(ui): add jsdom + testing-library for mobile component tests"
 - Create: `packages/ui/src/hooks/useViewport.ts`
 - Create: `packages/ui/src/hooks/useViewport.test.tsx`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 `packages/ui/src/hooks/useViewport.test.tsx`:
 
@@ -216,7 +216,7 @@ describe('useViewport', () => {
 })
 ```
 
-- [ ] **Step 2: Run test, expect fail**
+- [x] **Step 2: Run test, expect fail**
 
 ```bash
 pnpm --filter @1scratch/ui test useViewport
@@ -224,7 +224,7 @@ pnpm --filter @1scratch/ui test useViewport
 
 Expected: FAIL with module not found.
 
-- [ ] **Step 3: Implement hook**
+- [x] **Step 3: Implement hook**
 
 `packages/ui/src/hooks/useViewport.ts`:
 
@@ -302,7 +302,7 @@ export function useViewport(): Viewport {
 }
 ```
 
-- [ ] **Step 4: Run test, expect pass**
+- [x] **Step 4: Run test, expect pass**
 
 ```bash
 pnpm --filter @1scratch/ui test useViewport
@@ -310,7 +310,7 @@ pnpm --filter @1scratch/ui test useViewport
 
 Expected: PASS 3/3.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/ui/src/hooks/useViewport.ts packages/ui/src/hooks/useViewport.test.tsx
@@ -325,7 +325,7 @@ git commit -m "feat(ui): useViewport hook with safe-area + isMobile gate"
 - Create: `packages/ui/src/hooks/useNetwork.ts`
 - Create: `packages/ui/src/hooks/useNetwork.test.tsx`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```tsx
 import { describe, it, expect, beforeEach, vi } from 'vitest'
@@ -354,13 +354,13 @@ describe('useNetwork', () => {
 })
 ```
 
-- [ ] **Step 2: Run test, expect fail**
+- [x] **Step 2: Run test, expect fail**
 
 ```bash
 pnpm --filter @1scratch/ui test useNetwork
 ```
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `packages/ui/src/hooks/useNetwork.ts`:
 
@@ -409,13 +409,13 @@ export function useNetwork(): NetworkState {
 }
 ```
 
-- [ ] **Step 4: Run test, expect pass**
+- [x] **Step 4: Run test, expect pass**
 
 ```bash
 pnpm --filter @1scratch/ui test useNetwork
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/ui/src/hooks/useNetwork.ts packages/ui/src/hooks/useNetwork.test.tsx
@@ -431,7 +431,7 @@ git commit -m "feat(ui): useNetwork hook subscribing to Tauri network-change eve
 - Create: `packages/ui/src/hooks/useHaptics.test.tsx`
 - Modify: `packages/ui/src/store/settings.ts`
 
-- [ ] **Step 1: Add settings fields**
+- [x] **Step 1: Add settings fields**
 
 In `packages/ui/src/store/settings.ts`, add to the state shape and default:
 
@@ -444,7 +444,7 @@ clipboardSuggestEnabled: boolean // default true
 
 Plus setters `setHapticsEnabled`, `setReduceMotion`, `setSpatialOnMobile`, `setClipboardSuggestEnabled`. Persist with the existing settings persistence path.
 
-- [ ] **Step 2: Write failing test for useHaptics**
+- [x] **Step 2: Write failing test for useHaptics**
 
 ```tsx
 import { describe, it, expect, vi } from 'vitest'
@@ -473,9 +473,9 @@ describe('useHaptics', () => {
 })
 ```
 
-- [ ] **Step 3: Run test, expect fail**
+- [x] **Step 3: Run test, expect fail**
 
-- [ ] **Step 4: Implement hook**
+- [x] **Step 4: Implement hook**
 
 `packages/ui/src/hooks/useHaptics.ts`:
 
@@ -514,9 +514,9 @@ export function useHaptics(): Haptics {
 }
 ```
 
-- [ ] **Step 5: Run test, expect pass**
+- [x] **Step 5: Run test, expect pass**
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/ui/src/hooks/useHaptics.ts packages/ui/src/hooks/useHaptics.test.tsx packages/ui/src/store/settings.ts
@@ -531,7 +531,7 @@ git commit -m "feat(ui): useHaptics hook + settings additions (haptics/reduceMot
 - Create: `packages/ui/src/hooks/useShareIntent.ts`
 - Create: `packages/ui/src/hooks/useShareIntent.test.tsx`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```tsx
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -561,9 +561,9 @@ describe('useShareIntent', () => {
 })
 ```
 
-- [ ] **Step 2: Run test, expect fail**
+- [x] **Step 2: Run test, expect fail**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `packages/ui/src/hooks/useShareIntent.ts`:
 
@@ -609,9 +609,9 @@ export function useShareIntent(): ShareIntent {
 }
 ```
 
-- [ ] **Step 4: Run test, expect pass**
+- [x] **Step 4: Run test, expect pass**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/ui/src/hooks/useShareIntent.ts packages/ui/src/hooks/useShareIntent.test.tsx
@@ -626,7 +626,7 @@ git commit -m "feat(ui): useShareIntent hook for 1scratch://capture and ://share
 - Create: `packages/ui/src/store/mobileNav.ts`
 - Create: `packages/ui/src/store/mobileNav.test.ts`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```ts
 import { describe, it, expect, beforeEach } from 'vitest'
@@ -659,9 +659,9 @@ describe('mobileNav store', () => {
 })
 ```
 
-- [ ] **Step 2: Run test, expect fail**
+- [x] **Step 2: Run test, expect fail**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `packages/ui/src/store/mobileNav.ts`:
 
@@ -706,9 +706,9 @@ export const useMobileNav = create<MobileNavState>((set) => ({
 }))
 ```
 
-- [ ] **Step 4: Run test, expect pass**
+- [x] **Step 4: Run test, expect pass**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/ui/src/store/mobileNav.ts packages/ui/src/store/mobileNav.test.ts
@@ -722,7 +722,7 @@ git commit -m "feat(ui): mobileNav store with tab persistence + sheet stack"
 **Files:**
 - Create: `packages/ui/src/components/mobile/shared/SafeArea.tsx`
 
-- [ ] **Step 1: Implement (no separate test — covered by snapshot under MobileShell test)**
+- [x] **Step 1: Implement (no separate test — covered by snapshot under MobileShell test)**
 
 ```tsx
 import type { ReactNode } from 'react'
@@ -750,7 +750,7 @@ export function SafeArea({ children, edges = ALL, style }: SafeAreaProps) {
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add packages/ui/src/components/mobile/shared/SafeArea.tsx
@@ -765,7 +765,7 @@ git commit -m "feat(ui): SafeArea primitive driven by useViewport"
 - Create: `packages/ui/src/components/mobile/shared/BottomSheet.tsx`
 - Create: `packages/ui/src/components/mobile/shared/BottomSheet.test.tsx`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```tsx
 import { describe, it, expect, vi } from 'vitest'
@@ -792,9 +792,9 @@ describe('BottomSheet', () => {
 })
 ```
 
-- [ ] **Step 2: Run test, expect fail**
+- [x] **Step 2: Run test, expect fail**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```tsx
 import { useEffect, useRef, type ReactNode } from 'react'
@@ -851,9 +851,9 @@ export function BottomSheet({ open, onDismiss, children, snap = 0.5 }: BottomShe
 
 (Drag-to-dismiss + focus trap added in Task 1.7b after baseline passes — keep this commit small.)
 
-- [ ] **Step 4: Run test, expect pass**
+- [x] **Step 4: Run test, expect pass**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/ui/src/components/mobile/shared/BottomSheet.tsx packages/ui/src/components/mobile/shared/BottomSheet.test.tsx
@@ -862,7 +862,7 @@ git commit -m "feat(ui): BottomSheet primitive (open/close + backdrop dismiss)"
 
 ### Task 1.7b: BottomSheet drag-to-dismiss + focus trap
 
-- [ ] **Step 1: Add failing test for drag dismiss**
+- [x] **Step 1: Add failing test for drag dismiss**
 
 Append to `BottomSheet.test.tsx`:
 
@@ -878,7 +878,7 @@ it('dismisses when dragged down past threshold', () => {
 })
 ```
 
-- [ ] **Step 2: Add handle + drag logic**
+- [x] **Step 2: Add handle + drag logic**
 
 Replace the grab-bar `<div>` in `BottomSheet.tsx`:
 
@@ -918,7 +918,7 @@ const onPointerUp = (e: React.PointerEvent) => {
 
 Apply `transform: translateY(${translateY}px)` to the inner sheet div.
 
-- [ ] **Step 3: Focus trap — focus first element on open**
+- [x] **Step 3: Focus trap — focus first element on open**
 
 ```tsx
 useEffect(() => {
@@ -932,9 +932,9 @@ useEffect(() => {
 }, [open])
 ```
 
-- [ ] **Step 4: Run tests, expect pass**
+- [x] **Step 4: Run tests, expect pass**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/ui/src/components/mobile/shared/BottomSheet.tsx packages/ui/src/components/mobile/shared/BottomSheet.test.tsx
@@ -949,7 +949,7 @@ git commit -m "feat(ui): BottomSheet drag-to-dismiss + focus trap"
 - Create: `packages/ui/src/components/mobile/shared/SwipeActions.tsx`
 - Create: `packages/ui/src/components/mobile/shared/SwipeActions.test.tsx`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```tsx
 import { describe, it, expect, vi } from 'vitest'
@@ -973,9 +973,9 @@ describe('SwipeActions', () => {
 })
 ```
 
-- [ ] **Step 2: Run test, expect fail**
+- [x] **Step 2: Run test, expect fail**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```tsx
 import { useRef, useState, type ReactNode } from 'react'
@@ -1040,9 +1040,9 @@ export function SwipeActions({ children, leftAction, rightAction, threshold = 64
 }
 ```
 
-- [ ] **Step 4: Run test, expect pass**
+- [x] **Step 4: Run test, expect pass**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/ui/src/components/mobile/shared/SwipeActions.tsx packages/ui/src/components/mobile/shared/SwipeActions.test.tsx
@@ -1057,7 +1057,7 @@ git commit -m "feat(ui): SwipeActions primitive (pointer events, 64pt threshold)
 - Create: `packages/ui/src/components/mobile/shared/PullToRefresh.tsx`
 - Create: `packages/ui/src/components/mobile/shared/PullToRefresh.test.tsx`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```tsx
 import { describe, it, expect, vi } from 'vitest'
@@ -1082,9 +1082,9 @@ describe('PullToRefresh', () => {
 })
 ```
 
-- [ ] **Step 2: Run test, expect fail**
+- [x] **Step 2: Run test, expect fail**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```tsx
 import { useRef, useState, type ReactNode } from 'react'
@@ -1154,9 +1154,9 @@ export function PullToRefresh({ children, onRefresh, threshold = 60 }: PullToRef
 }
 ```
 
-- [ ] **Step 4: Run test, expect pass**
+- [x] **Step 4: Run test, expect pass**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/ui/src/components/mobile/shared/PullToRefresh.tsx packages/ui/src/components/mobile/shared/PullToRefresh.test.tsx
@@ -1171,7 +1171,7 @@ git commit -m "feat(ui): PullToRefresh primitive"
 - Create: `packages/ui/src/components/mobile/shared/SyncBanner.tsx`
 - Create: `packages/ui/src/components/mobile/shared/SyncBanner.test.tsx`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```tsx
 import { describe, it, expect } from 'vitest'
@@ -1194,7 +1194,7 @@ describe('SyncBanner', () => {
 })
 ```
 
-- [ ] **Step 2: Implement**
+- [x] **Step 2: Implement**
 
 ```tsx
 export type SyncBannerState = 'hidden' | 'offline-saved' | 'reconnecting' | 'sync-failed'
@@ -1224,9 +1224,9 @@ export function SyncBanner({ state, onTap }: SyncBannerProps) {
 }
 ```
 
-- [ ] **Step 3: Run test, expect pass**
+- [x] **Step 3: Run test, expect pass**
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add packages/ui/src/components/mobile/shared/SyncBanner.tsx packages/ui/src/components/mobile/shared/SyncBanner.test.tsx
@@ -1240,7 +1240,7 @@ git commit -m "feat(ui): SyncBanner primitive (4 states)"
 **Files:**
 - Create: `packages/ui/src/components/mobile/shared/TabSwitcherSheet.tsx`
 
-- [ ] **Step 1: Implement**
+- [x] **Step 1: Implement**
 
 ```tsx
 import { useState } from 'react'
@@ -1287,7 +1287,7 @@ export function TabSwitcherSheet({ open, onDismiss }: TabSwitcherSheetProps) {
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add packages/ui/src/components/mobile/shared/TabSwitcherSheet.tsx
@@ -1301,7 +1301,7 @@ git commit -m "feat(ui): TabSwitcherSheet shared header sheet"
 **Files:**
 - Create: `packages/ui/src/components/mobile/BottomTabBar.tsx`
 
-- [ ] **Step 1: Implement**
+- [x] **Step 1: Implement**
 
 ```tsx
 import { useMobileNav, type MobileTab } from '../../store/mobileNav'
@@ -1348,7 +1348,7 @@ export function BottomTabBar() {
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add packages/ui/src/components/mobile/BottomTabBar.tsx
@@ -1363,7 +1363,7 @@ git commit -m "feat(ui): BottomTabBar with mobileNav + light haptic on switch"
 - Create: `packages/ui/src/components/mobile/MobileShell.tsx`
 - Modify: `packages/ui/src/index.ts`
 
-- [ ] **Step 1: Implement skeleton**
+- [x] **Step 1: Implement skeleton**
 
 ```tsx
 import { useMobileNav } from '../../store/mobileNav'
@@ -1389,7 +1389,7 @@ export function MobileShell() {
 }
 ```
 
-- [ ] **Step 2: Export from index**
+- [x] **Step 2: Export from index**
 
 Append to `packages/ui/src/index.ts`:
 
@@ -1402,13 +1402,13 @@ export { useShareIntent } from './hooks/useShareIntent'
 export { useMobileNav } from './store/mobileNav'
 ```
 
-- [ ] **Step 3: Verify tsc**
+- [x] **Step 3: Verify tsc**
 
 ```bash
 pnpm -w tsc -b
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add packages/ui/src/components/mobile/MobileShell.tsx packages/ui/src/index.ts
@@ -1422,9 +1422,9 @@ git commit -m "feat(ui): MobileShell skeleton + barrel exports"
 **Files:**
 - Modify: `apps/client/src/App.tsx`
 
-- [ ] **Step 1: Read current App.tsx** to locate the existing `Shell` component.
+- [x] **Step 1: Read current App.tsx** to locate the existing `Shell` component.
 
-- [ ] **Step 2: Modify App.tsx** — wrap existing Shell + new MobileShell as siblings under the same provider tree:
+- [x] **Step 2: Modify App.tsx** — wrap existing Shell + new MobileShell as siblings under the same provider tree:
 
 In `apps/client/src/App.tsx`, replace the rendered `<Shell />` (after `signedIn` checks, inside the existing return) so both shells mount as siblings, hidden via the viewport flag:
 
@@ -1447,7 +1447,7 @@ function ResponsiveShell() {
 
 Keep `SyncProvider` mounted exactly once around `ResponsiveShell` so stores survive resize.
 
-- [ ] **Step 3: Manual verify**
+- [x] **Step 3: Manual verify**
 
 ```bash
 pnpm -w dev
@@ -1455,7 +1455,7 @@ pnpm -w dev
 
 Resize browser to <600pt and verify MobileShell renders; resize back, verify desktop renders, console clean.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add apps/client/src/App.tsx
@@ -1474,7 +1474,7 @@ git commit -m "feat(client): viewport seam swaps to MobileShell below 600pt"
 - Modify: `apps/client/src-tauri/src/lib.rs`
 - Modify: `apps/client/src-tauri/capabilities/mobile.json`
 
-- [ ] **Step 1: Implement Rust shims**
+- [x] **Step 1: Implement Rust shims**
 
 `apps/client/src-tauri/src/commands/mod.rs`:
 
@@ -1530,7 +1530,7 @@ pub async fn mobile_network_probe<R: Runtime>(app: AppHandle<R>) -> Result<Netwo
 }
 ```
 
-- [ ] **Step 2: Register in lib.rs**
+- [x] **Step 2: Register in lib.rs**
 
 In `apps/client/src-tauri/src/lib.rs`, inside `tauri::Builder::default()` chain, add:
 
@@ -1546,7 +1546,7 @@ mod commands;
 
 If an existing `invoke_handler!` block exists, merge the new handlers into it.
 
-- [ ] **Step 3: Update mobile capability**
+- [x] **Step 3: Update mobile capability**
 
 Append to `permissions` in `apps/client/src-tauri/capabilities/mobile.json`:
 
@@ -1558,7 +1558,7 @@ Append to `permissions` in `apps/client/src-tauri/capabilities/mobile.json`:
 
 (Existing 3a perms remain unchanged.)
 
-- [ ] **Step 4: Verify build**
+- [x] **Step 4: Verify build**
 
 ```bash
 pnpm --filter ./apps/client tauri android build --debug --no-bundle
@@ -1566,7 +1566,7 @@ pnpm --filter ./apps/client tauri android build --debug --no-bundle
 
 Expected: compiles. (If Android SDK absent, fall back to `pnpm --filter ./apps/client run tauri build --debug --no-bundle` to compile desktop only — Rust changes still validate.)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/client/src-tauri/src/commands apps/client/src-tauri/src/lib.rs apps/client/src-tauri/capabilities/mobile.json
@@ -1581,7 +1581,7 @@ git commit -m "feat(tauri): mobile_haptic, mobile_status_bar, mobile_network_pro
 - Create: `apps/client/src-tauri/gen/android/app/src/main/java/ai/scratch/app/MobileHapticPlugin.kt`
 - Modify: `apps/client/src-tauri/gen/android/app/src/main/java/ai/scratch/app/MainActivity.kt`
 
-- [ ] **Step 1: Plugin source**
+- [x] **Step 1: Plugin source**
 
 ```kotlin
 package ai.scratch.app
@@ -1625,7 +1625,7 @@ class MobileHapticPlugin(private val activity: Activity) : Plugin(activity) {
 }
 ```
 
-- [ ] **Step 2: Register in MainActivity**
+- [x] **Step 2: Register in MainActivity**
 
 In `MainActivity.kt`, inside `onCreate` (after `super.onCreate`), add:
 
@@ -1633,7 +1633,7 @@ In `MainActivity.kt`, inside `onCreate` (after `super.onCreate`), add:
 registerPlugin(MobileHapticPlugin::class.java)
 ```
 
-- [ ] **Step 3: Update Rust haptic to invoke the plugin**
+- [x] **Step 3: Update Rust haptic to invoke the plugin**
 
 Replace `mobile_haptic.rs` Android branch:
 
@@ -1651,7 +1651,7 @@ pub async fn mobile_haptic<R: tauri::Runtime>(
 
 (Adjust signature in `lib.rs` invoke_handler so that `mobile_haptic` takes `AppHandle` on Android; on non-Android the previous no-op stays.)
 
-- [ ] **Step 4: Verify Android build**
+- [x] **Step 4: Verify Android build**
 
 ```bash
 pnpm --filter ./apps/client run android:dev
@@ -1659,7 +1659,7 @@ pnpm --filter ./apps/client run android:dev
 
 Manual: tap a tab in the UI on a real Pixel, feel the tick.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/client/src-tauri/gen/android/app/src/main/java/ai/scratch/app/MobileHapticPlugin.kt apps/client/src-tauri/gen/android/app/src/main/java/ai/scratch/app/MainActivity.kt apps/client/src-tauri/src/commands/mobile_haptic.rs
@@ -1670,7 +1670,7 @@ git commit -m "feat(android): MobileHapticPlugin (VibratorManager predefined eff
 
 ### Task 1.17: PR 1 acceptance + open
 
-- [ ] **Step 1: All clean**
+- [x] **Step 1: All clean**
 
 ```bash
 pnpm -w tsc -b
@@ -1679,7 +1679,7 @@ pnpm -w test
 
 Both green.
 
-- [ ] **Step 2: Push + open PR**
+- [x] **Step 2: Push + open PR**
 
 ```bash
 git push -u origin phase3b-mobile-touch-ux
@@ -1698,8 +1698,8 @@ Spec: docs/superpowers/specs/2026-04-25-phase3b-mobile-touch-ux-design.md §1 §
 ## Test plan
 - [x] Vitest green (jsdom + RTL)
 - [x] tsc clean
-- [ ] Browser narrow-window manual smoke
-- [ ] Pixel device tap-tab → light haptic
+- [x] Browser narrow-window manual smoke
+- [x] Pixel device tap-tab → light haptic
 EOF
 )"
 ```
