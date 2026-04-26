@@ -1,7 +1,8 @@
-import '@testing-library/jest-dom/vitest'
-import { afterEach } from 'vitest'
+import * as matchers from '@testing-library/jest-dom/matchers'
+import { afterEach, expect } from 'vitest'
 import { cleanup } from '@testing-library/react'
 
+expect.extend(matchers as Record<string, unknown>)
 afterEach(() => { cleanup() })
 
 if (typeof window !== 'undefined' && !window.matchMedia) {
@@ -11,6 +12,14 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
     addEventListener: () => {}, removeEventListener: () => {},
     dispatchEvent: () => false,
   } as unknown as MediaQueryList)
+}
+
+if (typeof window !== 'undefined' && typeof Element !== 'undefined') {
+  // jsdom 25 does not implement Pointer Capture; stub to no-op so handlers using it don't throw
+  const proto = Element.prototype as unknown as Record<string, unknown>
+  if (typeof proto.setPointerCapture !== 'function') proto.setPointerCapture = function () {}
+  if (typeof proto.releasePointerCapture !== 'function') proto.releasePointerCapture = function () {}
+  if (typeof proto.hasPointerCapture !== 'function') proto.hasPointerCapture = function () { return false }
 }
 
 if (typeof window !== 'undefined' && !window.PointerEvent) {

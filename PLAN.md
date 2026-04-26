@@ -545,7 +545,7 @@ Spec: `docs/superpowers/specs/2026-04-19-phase3a-mobile-foundation-design.md`. P
 **Goal:** Touch-native mobile shell with Quick Capture, Library, You, Stack/Spatial canvas, FTS search, and offline/sync UX. Engages below 600pt viewport on any platform; reuses existing stores unchanged. Render-layer-only seam (`apps/client/src/App.tsx` swaps to `<MobileShell />` below 600pt).
 
 - [ ] **PR 1 — Foundations:** viewport seam (`useViewport`), `MobileShell`, bottom-tab nav, `mobileNav` store, shared primitives (`SafeArea`, `BottomSheet`, `SwipeActions`, `PullToRefresh`, `SyncBanner`), hooks (`useNetwork`, `useHaptics`, `useShareIntent`)
-- [ ] **PR 2 — Pointer Events shim:** `PointerDraggable` + `PointerResizable` replace `react-rnd` in `CardShell`; touch + mouse share one code path
+- [x] **PR 2 — Pointer Events shim:** `PointerDraggable` + `PointerResizable` replace `react-rnd` in `CardShell`; touch + mouse share one code path *(branch `phase3b-pr2-pointer-shim`, 2026-04-26 — see build log)*
 - [ ] **PR 3 — Quick Capture:** Composer (text + voice + camera + clipboard suggest), `RecentStack`, `MobileSignIn`. Voice = Web Speech API with Whisper fallback through `/api/ai`. Camera = Android `Intent.ACTION_IMAGE_CAPTURE` + EXIF-strip + thumbnail pipeline
 - [ ] **PR 4 — Library + You + Search:** Continue rail, `SectionTree`, `RecentCards`, FTS5 virtual table populated by sync engine writes, `SearchSheet` (offline), `DeviceList` against `/api/mobile/sessions`, `YouSurface`
 - [ ] **PR 5 — Canvas Stack + Spatial:** per-tab `viewMode`, `StackView` (vertical reorderable list), `SpatialView` (touch-friendly `<Canvas />`), image-card full + thumbnail storage
@@ -731,6 +731,34 @@ Items that are known-needed but blocked on something external (plan upgrade, app
 # Build Log — Amendments & Deviations
 
 Running ledger of in-flight changes to the plan as we actually build. Each entry: date, section affected, what changed, why. Append newest at the top. When an amendment supersedes an original plan decision, note the old assumption so future-us doesn't get confused re-reading the earlier sections.
+
+## 2026-04-26 — Phase 3b PR 2: Pointer Events shim, replaces `react-rnd`
+
+Scoped pass: PLAN §10 Phase 3b PR 2. Plan: `docs/superpowers/plans/2026-04-25-phase3b-mobile-touch-ux.md` §2 (Tasks 2.1–2.6). Branch: `phase3b-pr2-pointer-shim` (6 commits on top of `main`).
+
+**Shipped (Tasks 2.1–2.5):**
+- `PointerDraggable` (`packages/ui/src/components/mobile/shared/PointerDraggable.tsx` + tests): pointer-down/move/up with `setPointerCapture`, `longPressMs` gate (default 0 = instant; non-zero starts inert and arms a timer; 8px move before timer fires cancels), `disabled`, `handle` selector for drag-zone scoping, multi-pointer guard via `pointerId`.
+- `PointerResizable` (sibling file + tests): bottom-right 24×24 handle, only rendered when `selected`, `minWidth=80`/`minHeight=60` clamps.
+- `cards` store: `selectedCardId: string | null` + `setSelectedCard`. `removeCard` clears matching selection. `clearAll` resets it. Drives resize-handle visibility — handle hidden until card is tapped/clicked.
+- `CardShell` rewritten on top of the shim. Public `{ card, children }` prop signature kept (plan's snippet flattened to `{id,x,y,…}` but `NoteCard` is the sole caller and the flatten is gratuitous). Drag-tab UI, `scratch-card` class, and `zIndex` stacking preserved per plan note line 2129. `pointerDownCapture` on the outer wrapper fires `bringToFront(card.id)` + `setSelectedCard(card.id)` on every interaction (replaces react-rnd's `onMouseDown` + `onDragStart`/`onResizeStart`).
+- `react-rnd` removed from `packages/ui/package.json` (sole importer) and `apps/client/package.json` (carried but unused). Lockfile pruned.
+
+**Plan deviations (production-driven):**
+- Test infra: `@testing-library/jest-dom/vitest` side-effect import did not register matchers under vitest 2.1 + jest-dom 6.9.1 (chai's proxy reported "Invalid Chai property: toBeInTheDocument"). Fixed by switching `packages/ui/src/test-setup.ts` to explicit `import * as matchers from '@testing-library/jest-dom/matchers'; expect.extend(matchers)`. Pre-existing failures from PR 1 (`SyncBanner`, `BottomSheet`) green after fix. Bundled into PR 2 as a one-line commit (`24a7079`) since PR 1 had merged with these tests broken.
+- jsdom 25 does not implement `Element.setPointerCapture`/`releasePointerCapture`/`hasPointerCapture`. Plan's verbatim shim impl calls `setPointerCapture` so all shim tests crashed with `TypeError`. Added a no-op stub on `Element.prototype` in `test-setup.ts` (guarded by `typeof === 'function'` check). Plan's Task 1.0 should have anticipated this — note for the PR 1 retrospective.
+- Plan's `CardShell` snippet drops `zIndex`, the drag-tab UI, and the `scratch-card` wrapper. Kept all three to preserve desktop CSS contract (the plan note at line 2129 says "Keep any pre-existing class names / data attributes that desktop CSS depends on" — I read that as covering the inline-styled drag-tab affordance too).
+- `onPositionChange` / `onSizeChange` fire on every pointermove (plan-prescribed). With current cards store + sync engine that is one `updateCard` per move = many outbox writes per drag. Tolerable now; PR 6's `persistOnEveryMutation` flag plus the network-change kick will swallow the cost. Flag for revisit if drag latency shows up before then.
+
+**Verification:**
+- `pnpm --filter @1scratch/ui test` — 45 / 45 pass (was 36 / 39 before PR 1's matcher-extend fix).
+- `pnpm -w typecheck` clean.
+- Desktop manual drag/resize + Pixel device long-press in spatial mode: not yet attempted — PR 2 ships scaffolding for `CardShell`; spatial mode lights up in PR 5. Both checkboxes left open in the PR description.
+
+**Deferred to PR 3-6 of Phase 3b:**
+- PR 3: Quick Capture (composer + voice + camera + clipboard + ImageCard kind + MobileSignIn).
+- PR 4: Library + You + FTS5 search.
+- PR 5: Canvas Stack + Spatial views + `MobileCanvas` (lights up `selectedCardId` on touch).
+- PR 6: Sync resilience (`persistOnEveryMutation`, `network-change` kick, per-card sync state) + Pixel device runbook (DoD).
 
 ## 2026-04-25 → 2026-04-26 — Phase 3b PR 1: mobile foundations (viewport seam, primitives, hooks, haptics)
 
