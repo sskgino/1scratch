@@ -60,3 +60,39 @@ CREATE TABLE flush_snapshot (
   snapshot    TEXT NOT NULL,
   PRIMARY KEY (entity_type, entity_id)
 );
+
+-- FTS5 (Phase 3b)
+CREATE VIRTUAL TABLE cards_fts USING fts5(
+  card_id UNINDEXED,
+  content,
+  canvas_name,
+  section_name,
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+
+CREATE TRIGGER cards_fts_ai AFTER INSERT ON cards BEGIN
+  INSERT INTO cards_fts(card_id, content, canvas_name, section_name)
+  VALUES (new.id,
+          coalesce(json_extract(new.payload, '$.prompt'), '') || ' ' ||
+          coalesce(json_extract(new.payload, '$.response'), ''),
+          (SELECT name FROM canvases WHERE id = new.canvas_id),
+          (SELECT s.name FROM sections s
+             JOIN canvases c ON c.section_id = s.id
+            WHERE c.id = new.canvas_id));
+END;
+
+CREATE TRIGGER cards_fts_au AFTER UPDATE ON cards BEGIN
+  DELETE FROM cards_fts WHERE card_id = old.id;
+  INSERT INTO cards_fts(card_id, content, canvas_name, section_name)
+  VALUES (new.id,
+          coalesce(json_extract(new.payload, '$.prompt'), '') || ' ' ||
+          coalesce(json_extract(new.payload, '$.response'), ''),
+          (SELECT name FROM canvases WHERE id = new.canvas_id),
+          (SELECT s.name FROM sections s
+             JOIN canvases c ON c.section_id = s.id
+            WHERE c.id = new.canvas_id));
+END;
+
+CREATE TRIGGER cards_fts_ad AFTER DELETE ON cards BEGIN
+  DELETE FROM cards_fts WHERE card_id = old.id;
+END;
