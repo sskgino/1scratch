@@ -548,7 +548,7 @@ Spec: `docs/superpowers/specs/2026-04-19-phase3a-mobile-foundation-design.md`. P
 - [x] **PR 2 — Pointer Events shim:** `PointerDraggable` + `PointerResizable` replace `react-rnd` in `CardShell`; touch + mouse share one code path *(merged 2026-04-26 as #2 — see build log)*
 - [x] **PR 3 — Quick Capture:** Composer (text + voice + camera + clipboard suggest), `RecentStack`, `MobileSignIn`. Voice = Web Speech API with Whisper fallback through `/api/ai`. Camera = Android `Intent.ACTION_IMAGE_CAPTURE` + EXIF-strip + thumbnail pipeline *(merged 2026-04-26 as #3 — see build log)*
 - [x] **PR 4 — Library + You + Search:** Continue rail, `SectionTree`, `RecentCards`, FTS5 virtual table populated by sync engine writes, `SearchSheet` (offline), `DeviceList` against `/api/mobile/sessions`, `YouSurface` *(committed 2026-04-26 — see build log)*
-- [ ] **PR 5 — Canvas Stack + Spatial:** per-tab `viewMode`, `StackView` (vertical reorderable list), `SpatialView` (touch-friendly `<Canvas />`), image-card full + thumbnail storage
+- [x] **PR 5 — Canvas Stack + Spatial:** per-tab `viewMode`, `StackView` (vertical reorderable list), `SpatialView` (touch-friendly `<Canvas />`), image-card full + thumbnail storage *(committed 2026-04-26 — see build log)*
 - [ ] **PR 6 — Sync resilience + native polish:** persistent outbox (per-mutation), `network-change` kick within 500ms, per-card sync pip, tab-badge dot, status-bar theming, haptics wiring, reduce-motion compliance, A11y sweep, manual Android device DoD runbook
 
 Spec: `docs/superpowers/specs/2026-04-25-phase3b-mobile-touch-ux-design.md` *(spec file pending — plan landed first)*. Plan: `docs/superpowers/plans/phase3b_design_ux.md`.
@@ -731,6 +731,30 @@ Items that are known-needed but blocked on something external (plan upgrade, app
 # Build Log — Amendments & Deviations
 
 Running ledger of in-flight changes to the plan as we actually build. Each entry: date, section affected, what changed, why. Append newest at the top. When an amendment supersedes an original plan decision, note the old assumption so future-us doesn't get confused re-reading the earlier sections.
+
+## 2026-04-26 — Phase 3b PR 5: Canvas Stack + Spatial
+
+Scoped pass: PLAN §10 Phase 3b PR 5. Plan: `docs/superpowers/plans/2026-04-25-phase3b-mobile-touch-ux.md` §5 (Tasks 5.1–5.8). 8 commits on `main` (no feature branch — same direct-landing pattern as PR 4).
+
+**Shipped (Tasks 5.1–5.8):**
+- `canvas` store: added `viewModes: Record<canvasId, 'stack' | 'spatial'>` + `setViewMode(canvasId, mode)`. New exported `useEffectiveViewMode(canvasId)` hook resolves explicit per-tab override, else falls back to `isMobile && !settings.spatialOnMobile ? 'stack' : 'spatial'`.
+- Mobile canvas surfaces under `packages/ui/src/components/mobile/canvas/`: `CanvasHeader` (back, tab-name button → `TabSwitcherSheet`, view-mode segmented toggle), `ImageCard` (renders `asset://localhost/${thumbPath}` when local, second-device placeholder when not), `CardBubble` (unified prompt/image renderer), `StackView` (vertical card list, swipe-Delete + swipe-Archive via `SwipeActions`, `PullToRefresh` wrapper), `SpatialView` (`touchAction:'none'` wrap of existing desktop `<Canvas />`), `MobileCanvas` (assembly).
+- `Canvas.tsx`: added Pointer Events two-finger pinch-zoom + pan. New handlers (`onPointerDown/Move/Up`) tracked via `useRef<Map<pointerId, {x,y}>>`. Two-pointer state reads `useCanvasStore.getState()`, applies `panX/Y += centroid delta` and `zoom *= d / lastD` clamped 0.5–2.5×, then atomically `useCanvasStore.setState({...})`.
+- `MobileShell.tsx`: replaces the `Canvas (PR 5)` placeholder with `<MobileCanvas />`.
+
+**Plan deviations (production-driven):**
+- Plan §5.1 step-1 comment said "alongside the existing per-tab viewport map", but the existing `canvas` store is flat (single `panX/Y/zoom`), not per-tab. Added `viewModes` as a flat `Record<canvasId, mode>`; left desktop pan/zoom alone. Per-tab viewport persistence stays out of scope until a future PR explicitly needs it.
+- Plan §5.7 skeleton was untyped (`React.PointerEvent` only). Gated all new pointer handlers on `e.pointerType === 'touch'` so desktop mouse-emulation can't double-fire alongside the existing `onMouseDown` (which still owns desktop pan/wheel-zoom + click-to-create-card). Plan's atomic `setViewport((v) => …)` replaced with `useCanvasStore.setState({...})` since the store exposes `setPan` + `setZoom` separately and the plan wanted one update.
+- Plan §5.7 skeleton imported `setViewport` directly. Real store has `setPan` and `setZoom` (origin-aware, MIN_ZOOM=0.25 / MAX_ZOOM=4) but the mobile pinch path wants flat 0.5–2.5× clamp without origin reflow. Bypassed the helpers, called `setState` directly with computed `{zoom, panX, panY}` — matches plan's intent.
+
+**Verification:**
+- Repo tests: `pnpm -r test` — 165 pass total (56 ui / 91 web / 18 sync-engine).
+- `pnpm -w turbo run typecheck` — 5/5 packages green.
+- Pre-existing jest-dom matcher type errors in `packages/ui/test-setup.ts`, `BottomSheet.test.tsx`, `SyncBanner.test.tsx` survive direct `tsc --noEmit` from older commits (`24a7079`, `6836f9c`, `16d18b5`); CI's `pnpm typecheck` is unaffected. Worth a follow-up to fix `expect.extend(matchers)` typing — out of scope for PR 5.
+- Pixel device manual smoke (50+ card stack scroll, pinch-zoom 0.5–2.5×, two-finger pan, single-finger long-press card in spatial mode): not yet attempted — PR 6 device runbook. Scheduled follow-up agent for ~2 weeks.
+
+**Deferred to PR 6 of Phase 3b:**
+- PR 6: Sync resilience (persistent outbox per-mutation, `network-change` 500ms kick), per-card sync pip + tab-badge dot, status-bar theming, haptics wiring across the new pinch path, reduce-motion compliance, A11y sweep, manual Android device DoD runbook + real `SyncDiagnostics` wiring (replace YouSurface + `MobileCanvas.onRefresh` no-op placeholders with the SyncProvider exposure).
 
 ## 2026-04-26 — Phase 3b PR 4: Library + You + FTS5 search
 
