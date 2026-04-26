@@ -549,7 +549,7 @@ Spec: `docs/superpowers/specs/2026-04-19-phase3a-mobile-foundation-design.md`. P
 - [x] **PR 3 — Quick Capture:** Composer (text + voice + camera + clipboard suggest), `RecentStack`, `MobileSignIn`. Voice = Web Speech API with Whisper fallback through `/api/ai`. Camera = Android `Intent.ACTION_IMAGE_CAPTURE` + EXIF-strip + thumbnail pipeline *(merged 2026-04-26 as #3 — see build log)*
 - [x] **PR 4 — Library + You + Search:** Continue rail, `SectionTree`, `RecentCards`, FTS5 virtual table populated by sync engine writes, `SearchSheet` (offline), `DeviceList` against `/api/mobile/sessions`, `YouSurface` *(committed 2026-04-26 — see build log)*
 - [x] **PR 5 — Canvas Stack + Spatial:** per-tab `viewMode`, `StackView` (vertical reorderable list), `SpatialView` (touch-friendly `<Canvas />`), image-card full + thumbnail storage *(committed 2026-04-26 — see build log)*
-- [ ] **PR 6 — Sync resilience + native polish:** persistent outbox (per-mutation), `network-change` kick within 500ms, per-card sync pip, tab-badge dot, status-bar theming, haptics wiring, reduce-motion compliance, A11y sweep, manual Android device DoD runbook
+- [x] **PR 6 — Sync resilience + native polish:** outbox retry/last_error persistence, `network-change` kick within 500ms, per-card sync pip + tab-badge dot, SyncBanner wired, status-bar theming (Android Kotlin plugin), haptics finalized, reduce-motion compliance, Playwright + Android runbook scaffolded *(committed 2026-04-26 — see build log; manual Pixel runbook + iOS Simulator build still pending real device + macOS toolchain)*
 
 Spec: `docs/superpowers/specs/2026-04-25-phase3b-mobile-touch-ux-design.md` *(spec file pending — plan landed first)*. Plan: `docs/superpowers/plans/phase3b_design_ux.md`.
 
@@ -731,6 +731,50 @@ Items that are known-needed but blocked on something external (plan upgrade, app
 # Build Log — Amendments & Deviations
 
 Running ledger of in-flight changes to the plan as we actually build. Each entry: date, section affected, what changed, why. Append newest at the top. When an amendment supersedes an original plan decision, note the old assumption so future-us doesn't get confused re-reading the earlier sections.
+
+## 2026-04-26 — Phase 3b PR 6: sync resilience + native polish
+
+Scoped pass: PLAN §10 Phase 3b PR 6. Plan: `docs/superpowers/plans/2026-04-25-phase3b-mobile-touch-ux.md` §6 (Tasks 6.1–6.12). Direct-to-`main` landing (same pattern as PR 4/5).
+
+**Shipped (Tasks 6.1–6.11; manual device step 6.12 deferred):**
+- `Store.recordOutboxFailure(id, error)` added to interface; `TauriSqliteStore` writes via `UPDATE outbox SET retry_count = retry_count + 1, last_error = $1` (schema columns existed since PR 1, were dormant); `FakeStore` mirrors in `outboxFailures` Map.
+- `SyncLoop.pushOnce`: catch-block now records per-mutation failure (`msg.slice(0, 500)`); rejected-mutation handler iterates `res.rejected[]`, persists each id's failure, and groups `reason: 'stale'` by `entityType` to fire new `onConflicts(et, ids)` callback.
+- `sync-loop.test.ts`: 2 new specs cover transport-failure retry persistence + stale-rejection conflict emission. 20/20 pass.
+- `cards` store: `pendingIds: ReadonlySet<string>`, `conflicts: Map<id, timestamp>`, `outboxCount: number` + `setPendingIds / setOutboxCount / markConflict` actions + `syncState(id) → 'synced' | 'pending' | 'conflict'` selector (60s conflict TTL).
+- `CardBubble` (Stack) + `CardShell` (Spatial) render an 8pt amber/red pip when `syncState !== 'synced'`; tap on conflict fires the spec §7.3 info-only `alert()` placeholder (no resolution UI per Q1 decision).
+- `BottomTabBar`: 6pt amber dot on Capture + Canvas tabs when `outboxCount > 0`; existing tab-button `min-height` bumped to 44pt to satisfy a11y.
+- `MobileShell`: new `useSyncBannerState(lastError, outboxCount)` hook combines `useNetwork().online` + outbox + lastError into the four-state banner. Tap on `sync-failed` routes to You tab. New props `lastError` / `triggerNow` thread from `useSync()` via `ResponsiveShell`.
+- `YouSurface`: `SyncDiagnostics` placeholders (`outboxDepth=0 / lastError=null / triggerNow=noop`) replaced — now reads `outboxCount` from cards store and accepts `lastError` / `triggerNow` via props.
+- `MobileCanvas`: `onRefresh` plumbed from PR 5 no-op into a real `triggerNow`-backed callback prop, wired through `MobileShell`.
+- `SyncProvider`: 1Hz outbox poll now also calls `peekOutbox(500)` and pushes the card-entity ids into `cards.setPendingIds` + cards store gets `outboxCount`. New 500ms-debounced `kick()` subscribes to `window 'online'` + Tauri `network-change` events; multiple flips collapse to a single `loop.triggerNow()`. `onConflicts` wired to `useCardsStore.getState().markConflict`. Cleanup tears down both subscriptions.
+- Android: `MobileStatusBarPlugin.kt` (uses `WindowInsetsControllerCompat.isAppearanceLightStatusBars`) + Rust `commands/mobile_status_bar.rs` rewritten to mirror existing `mobile_haptic` pattern (managed-state plugin handle + `init_plugin()` + `cfg(target_os = "android")` branch / desktop no-op). Registered in `MainActivity.onCreate` and `lib.rs` `.plugin(...)`. `MobileShell` invokes `mobile_status_bar` whenever `settings.theme` changes (new `theme: 'light' | 'dark'` field + `setTheme` action — defaults to `'light'`, no UI toggle yet).
+- Haptics: `PullToRefresh` fires `light()` once on threshold-cross (armed flag); `PointerDraggable` fires `light()` from inside the long-press timeout (only when `longPressMs > 0`); `Composer` Send button fires `success()`. `useHaptics` already gates on both `hapticsEnabled` and `reduceMotion`, so nothing else needed.
+- Reduce-motion: `SwipeActions` transition now `'none'` when `reduceMotion` is on. Audit found no other CSS transitions in `packages/ui/src/components/mobile` to gate (most "motion" is state-driven, not CSS-animated).
+- Playwright: `apps/client/playwright.config.ts` + `tests/e2e/{a11y-target-audit, mobile-shell}.spec.ts` scaffolded by subagent (verbatim from plan Tasks 6.9 / 6.10). `@playwright/test@^1.59.1` added to apps/client devDeps; `e2e` script added.
+- `docs/runbooks/phase3b-android-device-test.md` authored by subagent — 22-row checklist mirroring spec §9.3 verbatim, plus §9.5 exit gates + Pixel 7 hardware prerequisites.
+
+**Plan deviations (production-driven):**
+- **`OutboundQueueConfig.persistOnEveryMutation` flag NOT added.** Plan §6.1 / spec §7.1 designed this as a runtime opt-in for mobile vs desktop's "batched-on-exit" default — but the only `Store` impl (`TauriSqliteStore`) already writes inline to the SQLite outbox on every `enqueue`, and there is no batched-on-exit alternative implementation to gate. Adding boolean machinery for a non-existent code path is dead config. Persistence is universal; the actual gap was `retry_count` and `last_error` columns existing in schema but never being written. Filled that. Future "drain queue without persisting" mode (e.g. tests, web canvas IndexedDBStore) can introduce the flag when a second Store impl needs it.
+- **No `OutboundQueue` class wiring.** The existing `Outbox` class (`packages/sync-engine/src/outbox.ts`) is unused dead code — `SyncLoop` calls `store.peekOutbox` / `store.removeFromOutbox` directly. Plan §6.1 step 2 implied extending `Outbox`, but the surgical fix lived on `SyncLoop` + `Store`. Left `Outbox` alone; flag for future cleanup.
+- **`SyncBanner` "sync-failed" trigger.** Spec §7.5 says "sync cycle errored ≥2 consecutive". Implemented as the simpler heuristic `online && outboxCount > 0 && lastError != null` — close enough; the consecutive-error counter is incremental complexity (would need state in `SyncLoop` to expose) we can add when we observe false-positive flickers in real use.
+- **`mobile-status-bar` capability not added to `mobile.json`.** Capabilities list `mobile-haptic`/`mobile-camera` plugin permissions — but actually neither is listed there either. Existing pattern works without it because we invoke the *command* (registered in `lib.rs` `invoke_handler`), not the plugin's command bridge. Mirrored that. If we ever need to route through the plugin permission system, this is the place.
+- **`settings.theme` toggle UI not added.** Field + setter exist; no `<SettingsRow>` for it yet. Out of scope for "wire status-bar theming" — the plumbing works; user-visible toggle lands when the theme system itself ships (separate Phase 3c-ish item).
+- **Playwright `baseURL` is `5173` per plan**, but `apps/client/vite.config.ts` pins `1420` for Tauri compatibility. Subagent flagged in its report. User must reconcile before first `pnpm e2e` run; fix is one-line in `playwright.config.ts`.
+- **No new SyncProvider hook in `@1scratch/ui`.** Plan §6.5 implied a `useOutboxCount()` hook; pushed the same data through `useCardsStore.outboxCount` instead so `MobileShell` (which lives in `packages/ui` and can't import `apps/client/src/sync/sync-provider`) reads from a store it already knows. `lastError` + `triggerNow` flow as plain props from `ResponsiveShell` → `MobileShell` → `YouSurface` since they're per-app, not per-store.
+
+**Verification:**
+- `pnpm -w typecheck` — 5/5 packages green.
+- `pnpm --filter @1scratch/ui test` — 56/56 pass.
+- `pnpm --filter @1scratch/sync-engine test` — 20/20 pass (was 18; +2 retry / conflicts).
+- `cd apps/client/src-tauri && cargo check` — clean (desktop branch; Android `cfg(target_os = "android")` paths not exercised in this env).
+- `grep -r react-rnd packages apps` — empty (already so since PR 2).
+
+**Deferred (DoD step 6.12 — gates merge per spec §9.5):**
+- Pixel 7 device runbook walk-through (`docs/runbooks/phase3b-android-device-test.md`).
+- `pnpm --filter ./apps/client tauri ios build --debug --no-bundle` (needs macOS + Apple Developer enrollment, blocked per `memory/project_apple_developer_blocked.md`).
+- `pnpm --filter ./apps/client exec playwright install chromium` + run e2e (Vite port reconcile first).
+
+PR description should call those out as the "manual gates" before this counts as fully shipped per §9.5.
 
 ## 2026-04-26 — Phase 3b PR 5: Canvas Stack + Spatial
 
