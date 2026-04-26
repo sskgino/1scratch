@@ -770,11 +770,17 @@ Scoped pass: PLAN §10 Phase 3b PR 6. Plan: `docs/superpowers/plans/2026-04-25-p
 - `grep -r react-rnd packages apps` — empty (already so since PR 2).
 
 **Deferred (DoD step 6.12 — gates merge per spec §9.5):**
-- Pixel 7 device runbook walk-through (`docs/runbooks/phase3b-android-device-test.md`).
-- `pnpm --filter ./apps/client tauri ios build --debug --no-bundle` (needs macOS + Apple Developer enrollment, blocked per `memory/project_apple_developer_blocked.md`).
-- `pnpm --filter ./apps/client exec playwright install chromium` + run e2e (Vite port reconcile first).
+- Pixel 7 device runbook walk-through (`docs/runbooks/phase3b-android-device-test.md`). `adb devices` shows none attached.
+- `pnpm --filter ./apps/client tauri ios build --debug --no-bundle` — Linux host + Apple Developer enrollment blocked per `memory/project_apple_developer_blocked.md`.
 
-PR description should call those out as the "manual gates" before this counts as fully shipped per §9.5.
+**DoD closure pass (commit `257518c`):**
+- `playwright.config.ts` baseURL fixed `5173 → 1420` (Vite `strictPort: 1420` from `apps/client/vite.config.ts`). Spec gotos use relative `'/?e2e=1'` against `baseURL`.
+- `App.tsx` adds dev-only auth bypass: `?e2e=1` flips `signedIn` synchronously when `import.meta.env.DEV` is truthy. Production builds tree-shake the entire branch — no auth surface change.
+- `App.tsx` red dev sign-out button: `minHeight: 44` (was 41 — caught by a11y target audit).
+- `mobile-shell.spec` assertion targets the CardBubble button by name `/hello/` (plan §6.10's `getByText('hello')` strict-matched both the textarea value and the card paragraph).
+- `pnpm --filter ./apps/client exec playwright install chromium` + `playwright test` — **2 / 2 pass** (a11y target audit + mobile-shell narrow-window).
+- `cargo check --target aarch64-linux-android` — **clean** (verifies the new `MobileStatusBarPlugin` Rust branch compiles for the real Android target, not just the desktop no-op).
+- `.gitignore` picks up `test-results/` + `playwright-report/`.
 
 ## 2026-04-26 — Phase 3b PR 5: Canvas Stack + Spatial
 
