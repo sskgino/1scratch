@@ -9,6 +9,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_1scratch_secure_store::init())
+        .plugin(commands::mobile_haptic::init_plugin())
         .invoke_handler(tauri::generate_handler![
             commands::mobile_haptic::mobile_haptic,
             commands::mobile_status_bar::mobile_status_bar,
