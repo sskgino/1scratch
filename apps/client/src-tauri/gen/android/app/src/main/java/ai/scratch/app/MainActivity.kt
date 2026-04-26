@@ -8,5 +8,6 @@ class MainActivity : TauriActivity() {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     registerPlugin(MobileHapticPlugin::class.java)
+    registerPlugin(MobileCameraPlugin::class.java)
   }
 }
