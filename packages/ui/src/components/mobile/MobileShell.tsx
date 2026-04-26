@@ -4,6 +4,7 @@ import { SafeArea } from './shared/SafeArea'
 import { QuickCapture } from './capture/QuickCapture'
 import { Library } from './library/Library'
 import { YouSurface } from './you/YouSurface'
+import { MobileCanvas } from './canvas/MobileCanvas'
 
 export interface MobileShellProps {
   signOut: () => Promise<void>
@@ -18,7 +19,7 @@ export function MobileShell({ signOut }: MobileShellProps) {
       </SafeArea>
       <main style={{ flex: 1, overflow: 'hidden' }}>
         {tab === 'capture' && <QuickCapture />}
-        {tab === 'canvas'  && <h1 style={{ padding: 16 }}>Canvas (PR 5)</h1>}
+        {tab === 'canvas'  && <MobileCanvas />}
         {tab === 'library' && <Library />}
         {tab === 'you'     && <YouSurface signOut={signOut} />}
       </main>
