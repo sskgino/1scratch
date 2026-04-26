@@ -19,6 +19,45 @@ export default function Canvas() {
   const isSpaceDown = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  // Touch pinch-zoom + two-finger pan (mobile)
+  const pointers = useRef(new Map<number, { x: number; y: number }>())
+  const lastPinch = useRef<{ d: number; cx: number; cy: number } | null>(null)
+  const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+    Math.hypot(a.x - b.x, a.y - b.y)
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'touch') return
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()]
+      lastPinch.current = { d: dist(a!, b!), cx: (a!.x + b!.x) / 2, cy: (a!.y + b!.y) / 2 }
+    }
+  }
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'touch') return
+    if (!pointers.current.has(e.pointerId)) return
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size === 2 && lastPinch.current) {
+      const [a, b] = [...pointers.current.values()]
+      const d = dist(a!, b!)
+      const cx = (a!.x + b!.x) / 2, cy = (a!.y + b!.y) / 2
+      const zoomDelta = d / lastPinch.current.d
+      const cur = useCanvasStore.getState()
+      const newZoom = Math.max(0.5, Math.min(2.5, cur.zoom * zoomDelta))
+      useCanvasStore.setState({
+        zoom: newZoom,
+        panX: cur.panX + (cx - lastPinch.current.cx),
+        panY: cur.panY + (cy - lastPinch.current.cy),
+      })
+      lastPinch.current = { d, cx, cy }
+    }
+  }
+  const onPointerUp = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'touch') return
+    pointers.current.delete(e.pointerId)
+    if (pointers.current.size < 2) lastPinch.current = null
+  }
+
   // Convert screen coords to canvas coords
   const screenToCanvas = useCallback(
     (sx: number, sy: number) => ({
@@ -113,6 +152,10 @@ export default function Canvas() {
     <div
       ref={containerRef}
       onMouseDown={handleMouseDown}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
       style={{
         position: 'absolute',
         inset: 0,
