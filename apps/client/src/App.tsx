@@ -47,12 +47,22 @@ function ResponsiveShell({ signOut: doSignOut }: { signOut: () => Promise<void> 
   )
 }
 
+// Dev-only e2e auth bypass: ?e2e=1 query param flips signedIn synchronously
+// so Playwright specs can render the authenticated shell without provisioning
+// a real refresh token. Strict-port dev server (1420) is the only place this
+// matters; production builds (vite build) ship with the import.meta.env.DEV
+// guard tree-shaken.
+const E2E_BYPASS = import.meta.env.DEV
+  && typeof window !== 'undefined'
+  && new URLSearchParams(window.location.search).get('e2e') === '1'
+
 export default function App() {
-  const [signedIn, setSignedIn] = useState(false)
-  const [busy, setBusy] = useState(true)
+  const [signedIn, setSignedIn] = useState(E2E_BYPASS)
+  const [busy, setBusy] = useState(!E2E_BYPASS)
   const [err, setErr] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   useEffect(() => {
+    if (E2E_BYPASS) return
     let active = true
     const consume = async (u: URL) => {
       const key = u.toString()
@@ -132,6 +142,7 @@ export default function App() {
           right: 12,
           zIndex: 9999,
           padding: '10px 16px',
+          minHeight: 44,
           fontSize: 14,
           background: '#dc2626',
           color: '#fff',

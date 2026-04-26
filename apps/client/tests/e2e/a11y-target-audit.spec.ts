@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 test('all interactive targets meet 44pt minimum', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 })
-  await page.goto('http://localhost:5173')
+  await page.goto('/?e2e=1')
 
   const small = await page.evaluate(() => {
     const sels = ['button', 'a', '[role="button"]', '[role="tab"]', 'input', 'select']
