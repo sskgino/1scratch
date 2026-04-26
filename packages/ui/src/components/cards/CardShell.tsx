@@ -1,6 +1,7 @@
-import { Rnd } from 'react-rnd'
 import { useCardsStore } from '../../store/cards'
 import type { Card } from '../../store/cards'
+import { PointerDraggable } from '../mobile/shared/PointerDraggable'
+import { PointerResizable } from '../mobile/shared/PointerResizable'
 
 interface Props {
   card: Card
@@ -8,75 +9,78 @@ interface Props {
 }
 
 export default function CardShell({ card, children }: Props) {
-  const { updateCard, bringToFront } = useCardsStore()
+  const updateCard = useCardsStore((s) => s.updateCard)
+  const bringToFront = useCardsStore((s) => s.bringToFront)
+  const setSelectedCard = useCardsStore((s) => s.setSelectedCard)
+  const isSelected = useCardsStore((s) => s.selectedCardId === card.id)
 
   return (
-    <Rnd
-      position={{ x: card.x, y: card.y }}
-      size={{ width: card.width, height: card.height }}
-      minWidth={80}
-      minHeight={36}
-      dragHandleClassName="drag-tab"
-      cancel="textarea, input, button, select, .no-drag"
-      style={{ zIndex: card.zIndex, position: 'absolute' }}
-      onDragStart={() => bringToFront(card.id)}
-      onDragStop={(_e, d) => updateCard(card.id, { x: d.x, y: d.y })}
-      onResizeStart={() => bringToFront(card.id)}
-      onResizeStop={(_e, _dir, ref, _delta, pos) => {
-        updateCard(card.id, {
-          width: ref.offsetWidth,
-          height: ref.offsetHeight,
-          x: pos.x,
-          y: pos.y,
-        })
+    <div
+      style={{ position: 'absolute', left: card.x, top: card.y, zIndex: card.zIndex }}
+      onPointerDownCapture={() => {
+        bringToFront(card.id)
+        setSelectedCard(card.id)
       }}
-      onMouseDown={() => bringToFront(card.id)}
     >
-      <div
-        className="scratch-card"
-        style={{
-          width: '100%',
-          height: '100%',
-          position: 'relative',
-          background: 'transparent',
-          borderRadius: 3,
-        }}
+      <PointerDraggable
+        position={{ x: card.x, y: card.y }}
+        onPositionChange={(p) => updateCard(card.id, { x: p.x, y: p.y })}
+        handle=".drag-tab"
       >
-        {/* Drag tab — centered at top, sticks up above the card */}
-        <div
-          className="drag-tab card-controls"
-          title="Drag to move"
-          style={{
-            position: 'absolute',
-            top: -14,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: 36,
-            height: 14,
-            background: 'rgba(0,0,0,0.09)',
-            border: '1px solid rgba(0,0,0,0.13)',
-            borderBottom: 'none',
-            borderRadius: '4px 4px 0 0',
-            cursor: 'grab',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            userSelect: 'none',
-          }}
+        <PointerResizable
+          size={{ width: card.width, height: card.height }}
+          onSizeChange={(s) => updateCard(card.id, { width: s.width, height: s.height })}
+          minWidth={80}
+          minHeight={36}
+          selected={isSelected}
         >
-          <span style={{
-            fontSize: 8,
-            color: 'rgba(0,0,0,0.35)',
-            letterSpacing: '1px',
-            lineHeight: 1,
-            pointerEvents: 'none',
-          }}>
-            ⠿
-          </span>
-        </div>
-
-        {children}
-      </div>
-    </Rnd>
+          <div
+            className="scratch-card"
+            style={{
+              width: '100%',
+              height: '100%',
+              position: 'relative',
+              background: 'transparent',
+              borderRadius: 3,
+            }}
+          >
+            <div
+              className="drag-tab card-controls"
+              title="Drag to move"
+              style={{
+                position: 'absolute',
+                top: -14,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: 36,
+                height: 14,
+                background: 'rgba(0,0,0,0.09)',
+                border: '1px solid rgba(0,0,0,0.13)',
+                borderBottom: 'none',
+                borderRadius: '4px 4px 0 0',
+                cursor: 'grab',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                userSelect: 'none',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 8,
+                  color: 'rgba(0,0,0,0.35)',
+                  letterSpacing: '1px',
+                  lineHeight: 1,
+                  pointerEvents: 'none',
+                }}
+              >
+                ⠿
+              </span>
+            </div>
+            {children}
+          </div>
+        </PointerResizable>
+      </PointerDraggable>
+    </div>
   )
 }
