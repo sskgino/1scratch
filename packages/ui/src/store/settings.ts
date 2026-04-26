@@ -25,6 +25,8 @@ export const DEFAULT_MODEL_SLOTS: Record<string, string> = {
   '9': '',
 }
 
+export type ThemeMode = 'light' | 'dark'
+
 interface SettingsState {
   apiKey: string
   fontFamily: string          // font id, e.g. 'Caveat'
@@ -33,6 +35,7 @@ interface SettingsState {
   reduceMotion: boolean
   spatialOnMobile: boolean
   clipboardSuggestEnabled: boolean
+  theme: ThemeMode
   setApiKey: (key: string) => void
   setFontFamily: (f: string) => void
   setModelSlot: (slot: string, model: string) => void
@@ -40,6 +43,7 @@ interface SettingsState {
   setReduceMotion: (v: boolean) => void
   setSpatialOnMobile: (v: boolean) => void
   setClipboardSuggestEnabled: (v: boolean) => void
+  setTheme: (t: ThemeMode) => void
   getFontCss: () => string
   getModel: (slot: string) => string
 }
@@ -54,6 +58,7 @@ export const useSettingsStore = create<SettingsState>()(
       reduceMotion: false,
       spatialOnMobile: false,
       clipboardSuggestEnabled: true,
+      theme: 'light',
 
       setApiKey: (apiKey) => set({ apiKey }),
       setFontFamily: (fontFamily) => set({ fontFamily }),
@@ -63,6 +68,7 @@ export const useSettingsStore = create<SettingsState>()(
       setReduceMotion: (reduceMotion) => set({ reduceMotion }),
       setSpatialOnMobile: (spatialOnMobile) => set({ spatialOnMobile }),
       setClipboardSuggestEnabled: (clipboardSuggestEnabled) => set({ clipboardSuggestEnabled }),
+      setTheme: (theme) => set({ theme }),
 
       getFontCss: () => {
         const { fontFamily } = get()

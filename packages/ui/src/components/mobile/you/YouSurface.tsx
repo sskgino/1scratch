@@ -4,13 +4,17 @@ import { SettingsRow } from './SettingsRow'
 import { BottomSheet } from '../shared/BottomSheet'
 import { SyncDiagnostics } from '../../SyncDiagnostics'
 import { useSettingsStore } from '../../../store/settings'
+import { useCardsStore } from '../../../store/cards'
 
 export interface YouSurfaceProps {
   signOut: () => Promise<void>
+  lastError?: string | null
+  triggerNow?: () => void | Promise<void>
 }
 
-export function YouSurface({ signOut }: YouSurfaceProps) {
+export function YouSurface({ signOut, lastError = null, triggerNow }: YouSurfaceProps) {
   const s = useSettingsStore()
+  const outboxDepth = useCardsStore((cs) => cs.outboxCount)
   const [diagOpen, setDiagOpen] = useState(false)
 
   const Toggle = ({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) => (
@@ -42,7 +46,7 @@ export function YouSurface({ signOut }: YouSurfaceProps) {
 
       <BottomSheet open={diagOpen} onDismiss={() => setDiagOpen(false)} snap={1}>
         <div style={{ padding: 16 }}>
-          <SyncDiagnostics outboxDepth={0} lastError={null} triggerNow={() => {}} />
+          <SyncDiagnostics outboxDepth={outboxDepth} lastError={lastError} triggerNow={triggerNow ?? (() => {})} />
         </div>
       </BottomSheet>
     </div>

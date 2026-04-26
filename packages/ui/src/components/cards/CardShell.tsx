@@ -13,6 +13,7 @@ export default function CardShell({ card, children }: Props) {
   const bringToFront = useCardsStore((s) => s.bringToFront)
   const setSelectedCard = useCardsStore((s) => s.setSelectedCard)
   const isSelected = useCardsStore((s) => s.selectedCardId === card.id)
+  const sync = useCardsStore((s) => s.syncState(card.id))
 
   return (
     <div
@@ -77,6 +78,18 @@ export default function CardShell({ card, children }: Props) {
                 ⠿
               </span>
             </div>
+            {sync !== 'synced' && (
+              <span
+                role="status"
+                aria-label={sync === 'conflict' ? 'Sync conflict' : 'Pending sync'}
+                onClick={(e) => {
+                  if (sync !== 'conflict') return
+                  e.stopPropagation()
+                  alert('This card was updated on another device — your changes were not applied. Reach out to support if data looks wrong.')
+                }}
+                style={{ position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: 4, background: sync === 'conflict' ? '#a33' : '#dba03c', zIndex: 2 }}
+              />
+            )}
             {children}
           </div>
         </PointerResizable>

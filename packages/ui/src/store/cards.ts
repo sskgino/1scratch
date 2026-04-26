@@ -37,15 +37,26 @@ export interface ImageCard extends BaseCard {
 
 export type Card = PromptCard | ImageCard
 
+export type SyncState = 'synced' | 'pending' | 'conflict'
+
+const CONFLICT_TTL_MS = 60_000
+
 interface CardsState {
   cards: Record<string, Card>
   maxZIndex: number
   selectedCardId: string | null
+  pendingIds: ReadonlySet<string>
+  conflicts: Map<string, number>
+  outboxCount: number
   addCard: (card: Omit<PromptCard, 'id' | 'createdAt' | 'zIndex' | 'updatedAt'> | Omit<ImageCard, 'id' | 'createdAt' | 'zIndex' | 'updatedAt'>) => string
   updateCard: (id: string, patch: Partial<Card>) => void
   removeCard: (id: string) => void
   bringToFront: (id: string) => void
   setSelectedCard: (id: string | null) => void
+  setPendingIds: (ids: Iterable<string>) => void
+  setOutboxCount: (n: number) => void
+  markConflict: (id: string) => void
+  syncState: (id: string) => SyncState
   clearAll: () => void
   loadCards: (cards: Record<string, Card>) => void
 }
@@ -54,6 +65,9 @@ export const useCardsStore = create<CardsState>((set, get) => ({
   cards: {},
   maxZIndex: 0,
   selectedCardId: null,
+  pendingIds: new Set<string>(),
+  conflicts: new Map<string, number>(),
+  outboxCount: 0,
 
   addCard: (cardData) => {
     const id = crypto.randomUUID()
@@ -93,7 +107,25 @@ export const useCardsStore = create<CardsState>((set, get) => ({
 
   setSelectedCard: (id) => set({ selectedCardId: id }),
 
-  clearAll: () => set({ cards: {}, maxZIndex: 0, selectedCardId: null }),
+  setPendingIds: (ids) => set({ pendingIds: new Set(ids) }),
+
+  setOutboxCount: (n) => set({ outboxCount: n }),
+
+  markConflict: (id) => set((s) => {
+    const next = new Map(s.conflicts)
+    next.set(id, Date.now())
+    return { conflicts: next }
+  }),
+
+  syncState: (id) => {
+    const s = get()
+    const at = s.conflicts.get(id)
+    if (at !== undefined && Date.now() - at < CONFLICT_TTL_MS) return 'conflict'
+    if (s.pendingIds.has(id)) return 'pending'
+    return 'synced'
+  },
+
+  clearAll: () => set({ cards: {}, maxZIndex: 0, selectedCardId: null, pendingIds: new Set(), conflicts: new Map(), outboxCount: 0 }),
 
   loadCards: (cards) => {
     const normalized: Record<string, Card> = {}

@@ -3,7 +3,7 @@ import Sidebar from '@1scratch/ui/components/layout/Sidebar'
 import TabBar from '@1scratch/ui/components/layout/TabBar'
 import Canvas from '@1scratch/ui/components/Canvas/Canvas'
 import Toolbar from '@1scratch/ui/components/ui/Toolbar'
-import { SyncProvider } from './sync/sync-provider'
+import { SyncProvider, useSync } from './sync/sync-provider'
 import { MobileShell, useViewport } from '@1scratch/ui'
 import { signOut } from '@1scratch/ui/auth/session'
 import { getColdStartUrl, listenForAuthCallback } from '@1scratch/ui/auth/deep-link'
@@ -36,10 +36,13 @@ function Shell() {
 
 function ResponsiveShell({ signOut: doSignOut }: { signOut: () => Promise<void> }) {
   const { isMobile } = useViewport()
+  const { lastError, triggerNow } = useSync()
   return (
     <>
       <div hidden={isMobile} style={{ height: '100%' }}><Shell /></div>
-      <div hidden={!isMobile} style={{ height: '100%' }}><MobileShell signOut={doSignOut} /></div>
+      <div hidden={!isMobile} style={{ height: '100%' }}>
+        <MobileShell signOut={doSignOut} lastError={lastError} triggerNow={triggerNow} />
+      </div>
     </>
   )
 }

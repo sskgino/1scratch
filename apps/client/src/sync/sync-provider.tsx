@@ -53,6 +53,11 @@ export function SyncProvider({ children, workspaceId }: { children: React.ReactN
         store, http, deviceId, pollIntervalMs: 30_000,
         ownDeviceWorkspaceId: () => workspaceId,
         onError: (e) => setLastError(e.message),
+        onConflicts: (entityType, ids) => {
+          if (entityType !== 'card') return
+          const mark = useCardsStore.getState().markConflict
+          for (const id of ids) mark(id)
+        },
       })
       loopRef.current = loop
       loop.start()
@@ -106,10 +111,41 @@ export function SyncProvider({ children, workspaceId }: { children: React.ReactN
       })
 
       const depthTimer = setInterval(async () => {
-        setOutboxDepth(await store.outboxDepth())
+        const [depth, pending] = await Promise.all([
+          store.outboxDepth(),
+          store.peekOutbox(500),
+        ])
+        setOutboxDepth(depth)
+        const cardIds = pending.filter((m) => m.entityType === 'card').map((m) => m.entityId)
+        const cs = useCardsStore.getState()
+        cs.setOutboxCount(depth)
+        cs.setPendingIds(cardIds)
       }, 1000)
 
-      return () => { unsub(); clearInterval(depthTimer) }
+      let kickTimer: ReturnType<typeof setTimeout> | null = null
+      const kick = () => {
+        if (kickTimer) return
+        kickTimer = setTimeout(() => {
+          kickTimer = null
+          void loop.triggerNow().catch(() => {})
+        }, 500)
+      }
+      const onOnline = () => kick()
+      window.addEventListener('online', onOnline)
+      let unlistenTauri: (() => void) | null = null
+      if ((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__) {
+        const { listen } = await import('@tauri-apps/api/event')
+        const off = await listen<{ online: boolean }>('network-change', (e) => { if (e.payload.online) kick() })
+        unlistenTauri = off
+      }
+
+      return () => {
+        unsub()
+        clearInterval(depthTimer)
+        if (kickTimer) clearTimeout(kickTimer)
+        window.removeEventListener('online', onOnline)
+        unlistenTauri?.()
+      }
     }
 
     const cleanupPromise = boot().catch((e) => { setLastError(String(e)) })
