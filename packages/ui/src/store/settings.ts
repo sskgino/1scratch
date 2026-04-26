@@ -29,9 +29,17 @@ interface SettingsState {
   apiKey: string
   fontFamily: string          // font id, e.g. 'Caveat'
   modelSlots: Record<string, string>
+  hapticsEnabled: boolean
+  reduceMotion: boolean
+  spatialOnMobile: boolean
+  clipboardSuggestEnabled: boolean
   setApiKey: (key: string) => void
   setFontFamily: (f: string) => void
   setModelSlot: (slot: string, model: string) => void
+  setHapticsEnabled: (v: boolean) => void
+  setReduceMotion: (v: boolean) => void
+  setSpatialOnMobile: (v: boolean) => void
+  setClipboardSuggestEnabled: (v: boolean) => void
   getFontCss: () => string
   getModel: (slot: string) => string
 }
@@ -42,11 +50,19 @@ export const useSettingsStore = create<SettingsState>()(
       apiKey: '',
       fontFamily: 'Caveat',
       modelSlots: { ...DEFAULT_MODEL_SLOTS },
+      hapticsEnabled: true,
+      reduceMotion: false,
+      spatialOnMobile: false,
+      clipboardSuggestEnabled: true,
 
       setApiKey: (apiKey) => set({ apiKey }),
       setFontFamily: (fontFamily) => set({ fontFamily }),
       setModelSlot: (slot, model) =>
         set((s) => ({ modelSlots: { ...s.modelSlots, [slot]: model } })),
+      setHapticsEnabled: (hapticsEnabled) => set({ hapticsEnabled }),
+      setReduceMotion: (reduceMotion) => set({ reduceMotion }),
+      setSpatialOnMobile: (spatialOnMobile) => set({ spatialOnMobile }),
+      setClipboardSuggestEnabled: (clipboardSuggestEnabled) => set({ clipboardSuggestEnabled }),
 
       getFontCss: () => {
         const { fontFamily } = get()

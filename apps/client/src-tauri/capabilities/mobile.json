@@ -15,6 +15,9 @@
     "opener:default",
     "os:allow-platform",
     "os:allow-version",
-    "1scratch-secure-store:default"
+    "1scratch-secure-store:default",
+    "core:event:default",
+    "core:event:allow-emit",
+    "core:event:allow-listen"
   ]
 }
