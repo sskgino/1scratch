@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
+import { useHaptics } from '../../../hooks/useHaptics'
 
 export interface PullToRefreshProps {
   children: ReactNode
@@ -8,19 +9,24 @@ export interface PullToRefreshProps {
 
 export function PullToRefresh({ children, onRefresh, threshold = 60 }: PullToRefreshProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null)
-  const drag = useRef<{ id: number; startY: number } | null>(null)
+  const drag = useRef<{ id: number; startY: number; armed: boolean } | null>(null)
   const [dy, setDy] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [pill, setPill] = useState<string | null>(null)
+  const haptics = useHaptics()
 
   const onPointerDown = (e: React.PointerEvent) => {
     if ((wrapRef.current?.scrollTop ?? 0) > 0) return
-    drag.current = { id: e.pointerId, startY: e.clientY }
+    drag.current = { id: e.pointerId, startY: e.clientY, armed: false }
   }
   const onPointerMove = (e: React.PointerEvent) => {
     if (!drag.current || drag.current.id !== e.pointerId) return
     const v = e.clientY - drag.current.startY
     if (v < 0) return
+    if (!drag.current.armed && v >= threshold) {
+      drag.current.armed = true
+      haptics.light()
+    }
     setDy(v)
   }
   const onPointerUp = async (e: React.PointerEvent) => {

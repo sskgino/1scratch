@@ -1,4 +1,5 @@
 import { useRef, type ReactNode } from 'react'
+import { useHaptics } from '../../../hooks/useHaptics'
 
 export interface PointerDraggableProps {
   position: { x: number; y: number }
@@ -24,6 +25,7 @@ const MOVE_CANCEL_THRESHOLD = 8
 export function PointerDraggable(props: PointerDraggableProps) {
   const { position, onPositionChange, onDragStart, onDragEnd, disabled, handle, longPressMs = 0, children } = props
   const stateRef = useRef<DragState | null>(null)
+  const haptics = useHaptics()
 
   const matchesHandle = (target: EventTarget | null): boolean => {
     if (!handle) return true
@@ -53,6 +55,7 @@ export function PointerDraggable(props: PointerDraggableProps) {
     if (longPressMs > 0) {
       s.longPressTimer = window.setTimeout(() => {
         s.active = true
+        haptics.light()
         onDragStart?.()
       }, longPressMs)
     } else {

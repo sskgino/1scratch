@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { SafeArea } from '../shared/SafeArea'
+import { useHaptics } from '../../../hooks/useHaptics'
 
 export interface ComposerProps {
   value: string
@@ -19,6 +20,8 @@ const MAX_LINES = 6
 export function Composer(p: ComposerProps) {
   const ref = useRef<HTMLTextAreaElement | null>(null)
   const [translateY, setTranslateY] = useState(0)
+  const haptics = useHaptics()
+  const onSend = () => { haptics.success(); p.onSend() }
 
   useEffect(() => {
     const vv = window.visualViewport
@@ -92,7 +95,7 @@ export function Composer(p: ComposerProps) {
           </button>
           <div style={{ flex: 1 }} />
           <button
-            aria-label="Send" disabled={!canSend} onClick={p.onSend}
+            aria-label="Send" disabled={!canSend} onClick={onSend}
             style={{
               width: 44, height: 44, fontSize: 20, border: 0,
               background: canSend ? '#222' : '#ccc', color: '#fff', borderRadius: 22,
