@@ -4,6 +4,7 @@ import TabBar from '@1scratch/ui/components/layout/TabBar'
 import Canvas from '@1scratch/ui/components/Canvas/Canvas'
 import Toolbar from '@1scratch/ui/components/ui/Toolbar'
 import { SyncProvider } from './sync/sync-provider'
+import { MobileShell, useViewport } from '@1scratch/ui'
 import { signOut } from '@1scratch/ui/auth/session'
 import { getColdStartUrl, listenForAuthCallback } from '@1scratch/ui/auth/deep-link'
 import { secureStore } from '@1scratch/ui/secure-store'
@@ -20,18 +21,26 @@ const consumedDeepLinks = new Set<string>()
 
 function Shell() {
   return (
-    <SyncProvider workspaceId={PLACEHOLDER_WORKSPACE_ID}>
-      <div style={{ display: 'flex', width: '100%', height: '100%' }}>
-        <Sidebar />
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          <TabBar />
-          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-            <Canvas />
-            <Toolbar />
-          </div>
+    <div style={{ display: 'flex', width: '100%', height: '100%' }}>
+      <Sidebar />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <TabBar />
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+          <Canvas />
+          <Toolbar />
         </div>
       </div>
-    </SyncProvider>
+    </div>
+  )
+}
+
+function ResponsiveShell() {
+  const { isMobile } = useViewport()
+  return (
+    <>
+      <div hidden={isMobile} style={{ height: '100%' }}><Shell /></div>
+      <div hidden={!isMobile} style={{ height: '100%' }}><MobileShell /></div>
+    </>
   )
 }
 
@@ -138,7 +147,9 @@ export default function App() {
       >
         Sign out
       </button>
-      <Shell />
+      <SyncProvider workspaceId={PLACEHOLDER_WORKSPACE_ID}>
+        <ResponsiveShell />
+      </SyncProvider>
     </>
   )
 }
