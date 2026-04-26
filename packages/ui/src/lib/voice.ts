@@ -57,8 +57,11 @@ function webSpeech(SR: new () => unknown, opts: StartOpts): VoiceHandle {
   inst.onresult = (e) => {
     let interim = ''
     for (let i = e.resultIndex; i < e.results.length; i++) {
-      const r = e.results[i][0]
-      if (e.results[i].isFinal) cumulative += r.transcript
+      const result = e.results[i]
+      if (!result) continue
+      const r = result[0]
+      if (!r) continue
+      if (result.isFinal) cumulative += r.transcript
       else interim += r.transcript
     }
     if (interim) opts.onPartial?.(cumulative + interim)

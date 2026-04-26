@@ -57,7 +57,7 @@ describe('voice — fallback path', () => {
 
   it('hits /api/ai with transcribe=true and returns final text', async () => {
     const handle = await startDictation({})
-    const recorder = (MediaRecorder as unknown as { mock: { results: { value: { ondataavailable: ((e: { data: Blob }) => void) | null; onstop: (() => void) | null } }[] } }).mock.results[0].value
+    const recorder = (MediaRecorder as unknown as { mock: { results: { value: { ondataavailable: ((e: { data: Blob }) => void) | null; onstop: (() => void) | null } }[] } }).mock.results[0]!.value
     setTimeout(() => {
       recorder.ondataavailable?.({ data: new Blob(['x'], { type: 'audio/webm' }) })
       recorder.onstop?.()
@@ -76,7 +76,7 @@ describe('voice — fallback path', () => {
     )
     const errors: { kind: string }[] = []
     const handle = await startDictation({ onError: (e) => errors.push(e) })
-    const recorder = (MediaRecorder as unknown as { mock: { results: { value: { ondataavailable: ((e: { data: Blob }) => void) | null; onstop: (() => void) | null } }[] } }).mock.results[0].value
+    const recorder = (MediaRecorder as unknown as { mock: { results: { value: { ondataavailable: ((e: { data: Blob }) => void) | null; onstop: (() => void) | null } }[] } }).mock.results[0]!.value
     setTimeout(() => {
       recorder.ondataavailable?.({ data: new Blob(['x'], { type: 'audio/webm' }) })
       recorder.onstop?.()
