@@ -1,6 +1,7 @@
 import { useMobileNav } from '../../store/mobileNav'
 import { BottomTabBar } from './BottomTabBar'
 import { SafeArea } from './shared/SafeArea'
+import { QuickCapture } from './capture/QuickCapture'
 
 export function MobileShell() {
   const tab = useMobileNav((s) => s.tab)
@@ -10,10 +11,10 @@ export function MobileShell() {
         <header style={{ padding: '8px 16px', fontSize: 14, color: '#666' }}>1Scratch</header>
       </SafeArea>
       <main style={{ flex: 1, overflow: 'hidden' }}>
-        {tab === 'capture' && <h1 style={{ padding: 16 }}>Capture</h1>}
-        {tab === 'canvas'  && <h1 style={{ padding: 16 }}>Canvas</h1>}
-        {tab === 'library' && <h1 style={{ padding: 16 }}>Library</h1>}
-        {tab === 'you'     && <h1 style={{ padding: 16 }}>You</h1>}
+        {tab === 'capture' && <QuickCapture />}
+        {tab === 'canvas'  && <h1 style={{ padding: 16 }}>Canvas (PR 5)</h1>}
+        {tab === 'library' && <h1 style={{ padding: 16 }}>Library (PR 4)</h1>}
+        {tab === 'you'     && <h1 style={{ padding: 16 }}>You (PR 4)</h1>}
       </main>
       <BottomTabBar />
     </div>

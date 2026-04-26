@@ -3,11 +3,16 @@ import CanvasGrid from './CanvasGrid'
 import CardLayer from './CardLayer'
 import { useCanvasStore } from '../../store/canvas'
 import { useCardsStore } from '../../store/cards'
+import { useWorkspaceStore } from '../../store/workspace'
 import { makeCard } from '../../lib/cardFactory'
 
 export default function Canvas() {
   const { panX, panY, zoom, setPan, setZoom } = useCanvasStore()
   const { addCard } = useCardsStore()
+  const activeCanvasId = useWorkspaceStore((s) => {
+    const sec = s.sections.find((x) => x.id === s.activeSectionId)
+    return sec?.activeTabId ?? ''
+  })
 
   const isPanning = useRef(false)
   const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 })
@@ -39,10 +44,10 @@ export default function Canvas() {
       if (e.button === 0 && e.target === containerRef.current) {
         const pos = screenToCanvas(e.clientX, e.clientY)
         const TEXTAREA_PAD = 5
-        addCard(makeCard(pos.x - TEXTAREA_PAD, pos.y - TEXTAREA_PAD))
+        addCard(makeCard(activeCanvasId, pos.x - TEXTAREA_PAD, pos.y - TEXTAREA_PAD))
       }
     },
-    [panX, panY, screenToCanvas, addCard],
+    [panX, panY, screenToCanvas, addCard, activeCanvasId],
   )
 
   const handleMouseMove = useCallback(

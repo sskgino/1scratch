@@ -6,7 +6,9 @@ export default function CardLayer() {
   return (
     <>
       {Object.values(cards).map((card) => (
-        <NoteCard key={card.id} card={card} />
+        card.kind === 'prompt'
+          ? <NoteCard key={card.id} card={card} />
+          : null
       ))}
     </>
   )

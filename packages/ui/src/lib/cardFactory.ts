@@ -1,12 +1,15 @@
-import type { Card } from '../store/cards'
+import type { PromptCard } from '../store/cards'
 
 export function makeCard(
+  canvasId: string,
   x: number,
   y: number,
-  overrides: Partial<Card> = {},
-): Omit<Card, 'id' | 'createdAt' | 'zIndex'> {
+  overrides: Partial<PromptCard> = {},
+): Omit<PromptCard, 'id' | 'createdAt' | 'zIndex' | 'updatedAt'> {
   return {
+    kind: 'prompt',
     type: 'card',
+    canvasId,
     x,
     y,
     width: 130,
