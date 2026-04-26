@@ -11,6 +11,7 @@ pub fn run() {
         .plugin(tauri_plugin_1scratch_secure_store::init())
         .plugin(commands::mobile_haptic::init_plugin())
         .plugin(commands::mobile_camera::init_plugin())
+        .plugin(commands::mobile_status_bar::init_plugin())
         .invoke_handler(tauri::generate_handler![
             commands::mobile_haptic::mobile_haptic,
             commands::mobile_status_bar::mobile_status_bar,
