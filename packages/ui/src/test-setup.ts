@@ -1,7 +1,8 @@
-import '@testing-library/jest-dom/vitest'
-import { afterEach } from 'vitest'
+import * as matchers from '@testing-library/jest-dom/matchers'
+import { afterEach, expect } from 'vitest'
 import { cleanup } from '@testing-library/react'
 
+expect.extend(matchers as Record<string, unknown>)
 afterEach(() => { cleanup() })
 
 if (typeof window !== 'undefined' && !window.matchMedia) {
