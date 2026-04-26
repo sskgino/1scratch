@@ -1,11 +1,15 @@
 import { create } from 'zustand'
+import { useViewport } from '../hooks/useViewport'
+import { useSettingsStore } from './settings'
 
 interface CanvasState {
   panX: number
   panY: number
   zoom: number
+  viewModes: Record<string, 'stack' | 'spatial'>
   setPan: (x: number, y: number) => void
   setZoom: (zoom: number, originX?: number, originY?: number) => void
+  setViewMode: (canvasId: string, mode: 'stack' | 'spatial') => void
   resetViewport: () => void
   loadViewport: (v: { panX: number; panY: number; zoom: number }) => void
 }
@@ -17,6 +21,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   panX: 0,
   panY: 0,
   zoom: 1,
+  viewModes: {},
 
   setPan: (x, y) => set({ panX: x, panY: y }),
 
@@ -30,7 +35,18 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set({ zoom: clamped, panX: newPanX, panY: newPanY })
   },
 
+  setViewMode: (canvasId, mode) =>
+    set((s) => ({ viewModes: { ...s.viewModes, [canvasId]: mode } })),
+
   resetViewport: () => set({ panX: 0, panY: 0, zoom: 1 }),
 
   loadViewport: (v) => set({ panX: v.panX, panY: v.panY, zoom: v.zoom }),
 }))
+
+export function useEffectiveViewMode(canvasId: string): 'stack' | 'spatial' {
+  const explicit = useCanvasStore((s) => s.viewModes[canvasId])
+  const { isMobile } = useViewport()
+  const spatialDefault = useSettingsStore((s) => s.spatialOnMobile)
+  if (explicit) return explicit
+  return isMobile && !spatialDefault ? 'stack' : 'spatial'
+}
