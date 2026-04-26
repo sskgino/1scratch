@@ -522,20 +522,52 @@ Each phase is ~3 weeks. Dates are calendar weeks from kickoff (W0 = today).
 
 **Exit criteria:** A user can sign in on desktop, configure all 10 model slots with mixed providers, run prompts, and lose/restore the local cache without data loss.
 
-### Phase 3 — Mobile Launch (W6 → W9)
+### Phase 3 — Mobile Launch (W6 → W9.5)
 
-**Goal:** Tauri Mobile builds running on TestFlight + Play internal track, parity with desktop minus local-models.
+Phase 3 splits into three sub-phases. **3a** lays the cross-platform Tauri Mobile foundation; **3b** lands the touch-native UX + design framework on top; **3c** ships the launch surface (push, store metadata, prod Clerk, iOS device validation, beta cohort, App Store review).
 
-- [ ] Tauri Mobile project setup, shared `src/` across platforms
-- [ ] iOS: Apple Sign-In integration, Keychain wrapper plugin, Privacy Manifest
-- [ ] Android: Keystore wrapper, Data Safety form, biometric unlock optional
-- [ ] Adapt sidebar / tab UX for touch (longer press → context menu instead of right-click)
-- [ ] Offline-first writes, sync on foreground / connectivity resume
+#### Phase 3a — Mobile Foundation (W6, shipped)
+
+**Goal:** Android build that passes the Pixel 9 Pro XL DoD: cold launch, sign-in via deep-link, refresh rotation, secure storage, sign-out.
+
+- [x] Tauri Mobile project setup, shared `apps/client/src/` across desktop + Android (`packages/ui` extracted from `apps/client/src/{components,lib,store}`)
+- [x] Android Keystore wrapper plugin (`packages/tauri-plugin-secure-store`) — AES-GCM ciphertext only on disk
+- [x] Deep-link auth callback (`tauri-plugin-deep-link` + `1scratch://oauth/done`) with single-writer keystore + module-level cold-start dedupe
+- [x] CORS allow-list for the three Tauri WebView origins (`apps/web/src/lib/cors-mobile.ts`) + `POST /api/mobile/refresh` route
+- [x] Cert-pinning the API hostname — landed in 3a alongside Android networking (was originally Phase 2 deferred)
+
+Spec: `docs/superpowers/specs/2026-04-19-phase3a-mobile-foundation-design.md`. Plan: `docs/superpowers/plans/2026-04-19-phase3a-mobile-foundation.md`. Real-device DoD trace in Build Log entries dated 2026-04-19→23.
+
+**Deferred to 3a-ios-finish (Apple Developer enrollment unblocks):** iOS init from macOS, Apple Sign-In wiring, iOS Keychain wrapper, Privacy Manifest, TestFlight cert.
+
+#### Phase 3b — Mobile Touch UX + Design Framework (W7 → W8.5)
+
+**Goal:** Touch-native mobile shell with Quick Capture, Library, You, Stack/Spatial canvas, FTS search, and offline/sync UX. Engages below 600pt viewport on any platform; reuses existing stores unchanged. Render-layer-only seam (`apps/client/src/App.tsx` swaps to `<MobileShell />` below 600pt).
+
+- [ ] **PR 1 — Foundations:** viewport seam (`useViewport`), `MobileShell`, bottom-tab nav, `mobileNav` store, shared primitives (`SafeArea`, `BottomSheet`, `SwipeActions`, `PullToRefresh`, `SyncBanner`), hooks (`useNetwork`, `useHaptics`, `useShareIntent`)
+- [ ] **PR 2 — Pointer Events shim:** `PointerDraggable` + `PointerResizable` replace `react-rnd` in `CardShell`; touch + mouse share one code path
+- [ ] **PR 3 — Quick Capture:** Composer (text + voice + camera + clipboard suggest), `RecentStack`, `MobileSignIn`. Voice = Web Speech API with Whisper fallback through `/api/ai`. Camera = Android `Intent.ACTION_IMAGE_CAPTURE` + EXIF-strip + thumbnail pipeline
+- [ ] **PR 4 — Library + You + Search:** Continue rail, `SectionTree`, `RecentCards`, FTS5 virtual table populated by sync engine writes, `SearchSheet` (offline), `DeviceList` against `/api/mobile/sessions`, `YouSurface`
+- [ ] **PR 5 — Canvas Stack + Spatial:** per-tab `viewMode`, `StackView` (vertical reorderable list), `SpatialView` (touch-friendly `<Canvas />`), image-card full + thumbnail storage
+- [ ] **PR 6 — Sync resilience + native polish:** persistent outbox (per-mutation), `network-change` kick within 500ms, per-card sync pip, tab-badge dot, status-bar theming, haptics wiring, reduce-motion compliance, A11y sweep, manual Android device DoD runbook
+
+Spec: `docs/superpowers/specs/2026-04-25-phase3b-mobile-touch-ux-design.md` *(spec file pending — plan landed first)*. Plan: `docs/superpowers/plans/phase3b_design_ux.md`.
+
+**Exit criteria (gating PR 6):** Quick Capture round-trip on real Android (text + voice + camera + clipboard each create cards); Stack mode 50+ cards scroll smoothly; Spatial pinch-zoom matches desktop trackpad; offline 60s + 5 cards reconciles on second device within 10s; narrow-window desktop ≤ 600pt swaps to MobileShell with no remount errors; iOS Simulator build compiles (UX validation deferred to 3c per locked decision).
+
+#### Phase 3c — Push, Store, Beta, Submission (W8.5 → W9.5)
+
+**Goal:** Public-track readiness on both stores.
+
+- [ ] iOS device finish: Apple Sign-In integration, iOS Keychain wrapper, Privacy Manifest, real-device UX validation (deferred from 3a + 3b)
+- [ ] Android: Data Safety form, biometric unlock optional, App Links `assetlinks.json` hash for prod release keystore (3a only verified the AGP debug keystore SHA256)
 - [ ] Push notification infra (APNs + FCM) — opt-in, used for daily-cap alerts and Pro feature events
+- [ ] Production Clerk instance under `clerk.1scratch.ai` — promote off the dev `*.accounts.dev` instance before public sign-ups (cookies, sender email, branding)
+- [ ] OS share-intent + shortcut routing (`useShareIntent` consumes `1scratch://share?…` payloads — parsed in 3b, routed in 3c)
 - [ ] Beta cohort: 50 invitees via TestFlight + Play Internal
-- [ ] App Store review submission **week 8** (buffer: review can take 1-2 wk)
+- [ ] App Store review submission **week 8.5** (buffer: review can take 1-2 wk)
 
-**Exit criteria:** Signed builds on both stores in beta tracks; users can prompt → sync → see results on desktop.
+**Exit criteria:** Signed builds on both stores in beta tracks; users can prompt → sync → see results on desktop; push notifications deliver to opted-in devices; prod Clerk handshake green from cold-start.
 
 ### Phase 4 — Premium, Polish, Launch (W9 → W12)
 
@@ -699,6 +731,20 @@ Items that are known-needed but blocked on something external (plan upgrade, app
 # Build Log — Amendments & Deviations
 
 Running ledger of in-flight changes to the plan as we actually build. Each entry: date, section affected, what changed, why. Append newest at the top. When an amendment supersedes an original plan decision, note the old assumption so future-us doesn't get confused re-reading the earlier sections.
+
+## 2026-04-25 — §10 Phase 3 split into 3a/3b/3c; Claude Design framework adopted as 3b
+
+§10 Phase 3 was a single eight-bullet block. Restructured into three sub-phases:
+
+- **3a — Mobile Foundation** (already shipped, see entry below dated 2026-04-19→23). Items moved up: Tauri Mobile setup, Android Keystore wrapper, deep-link auth, CORS for Tauri WebView, cert-pinning (cert-pinning was originally Phase 2 deferred-to-3 — landed in 3a).
+- **3b — Mobile Touch UX + Design Framework** (new, expanded). Original 3b touch-UX bullets ("Adapt sidebar / tab UX for touch", "Offline-first writes / sync on foreground") are absorbed into a much fatter mobile-native shell delivered by Claude Design: viewport seam below 600pt swapping to `<MobileShell />`, bottom-tab nav (Capture / Canvas / Library / You), `PointerDraggable` shim replacing `react-rnd`, Quick Capture composer (text + voice + camera + clipboard suggest), Library (Continue rail + section tree + recent), You (devices + settings), Stack vs Spatial canvas views, FTS5 offline search, persistent outbox + network-change kick. Six PRs.
+- **3c — Push, Store, Beta, Submission** (new). Receives all launch-track items deferred from the original 3b: push infra (APNs + FCM), Play Console / store metadata + Data Safety form, App Links assetlinks for prod release keystore, prod Clerk instance promotion off `*.accounts.dev`, iOS Apple Sign-In + Privacy Manifest + real-device UX (also deferred from 3a-ios-finish), OS share-intent routing, beta cohort, App Store review submission.
+
+Why now: Claude Design produced a full 3b plan (`docs/superpowers/plans/phase3b_design_ux.md`) covering the touch UX layer plus mobile-native surfaces (Quick Capture / Library / You / Stack/Spatial / FTS) that the original PLAN didn't enumerate. Merging it under "3b" preserves the W6→W9 schedule but makes the launch surface (3c) explicit instead of implicit.
+
+**Old assumption superseded:** previously "Phase 3" was a single mobile-launch block; future-us re-reading line 525-538 should look to the three sub-phases instead.
+
+**Spec gap flagged:** the Claude Design plan references `docs/superpowers/specs/2026-04-25-phase3b-mobile-touch-ux-design.md`, which is not yet in `docs/superpowers/specs/`. Plan landed first; spec to follow.
 
 ## 2026-04-19 → 2026-04-23 — Phase 3a: mobile foundation (Android-first)
 
