@@ -547,7 +547,7 @@ Spec: `docs/superpowers/specs/2026-04-19-phase3a-mobile-foundation-design.md`. P
 - [x] **PR 1 — Foundations:** viewport seam (`useViewport`), `MobileShell`, bottom-tab nav, `mobileNav` store, shared primitives (`SafeArea`, `BottomSheet`, `SwipeActions`, `PullToRefresh`, `SyncBanner`), hooks (`useNetwork`, `useHaptics`, `useShareIntent`) *(merged 2026-04-26)*
 - [x] **PR 2 — Pointer Events shim:** `PointerDraggable` + `PointerResizable` replace `react-rnd` in `CardShell`; touch + mouse share one code path *(merged 2026-04-26 as #2 — see build log)*
 - [x] **PR 3 — Quick Capture:** Composer (text + voice + camera + clipboard suggest), `RecentStack`, `MobileSignIn`. Voice = Web Speech API with Whisper fallback through `/api/ai`. Camera = Android `Intent.ACTION_IMAGE_CAPTURE` + EXIF-strip + thumbnail pipeline *(merged 2026-04-26 as #3 — see build log)*
-- [ ] **PR 4 — Library + You + Search:** Continue rail, `SectionTree`, `RecentCards`, FTS5 virtual table populated by sync engine writes, `SearchSheet` (offline), `DeviceList` against `/api/mobile/sessions`, `YouSurface`
+- [x] **PR 4 — Library + You + Search:** Continue rail, `SectionTree`, `RecentCards`, FTS5 virtual table populated by sync engine writes, `SearchSheet` (offline), `DeviceList` against `/api/mobile/sessions`, `YouSurface` *(committed 2026-04-26 — see build log)*
 - [ ] **PR 5 — Canvas Stack + Spatial:** per-tab `viewMode`, `StackView` (vertical reorderable list), `SpatialView` (touch-friendly `<Canvas />`), image-card full + thumbnail storage
 - [ ] **PR 6 — Sync resilience + native polish:** persistent outbox (per-mutation), `network-change` kick within 500ms, per-card sync pip, tab-badge dot, status-bar theming, haptics wiring, reduce-motion compliance, A11y sweep, manual Android device DoD runbook
 
@@ -731,6 +731,34 @@ Items that are known-needed but blocked on something external (plan upgrade, app
 # Build Log — Amendments & Deviations
 
 Running ledger of in-flight changes to the plan as we actually build. Each entry: date, section affected, what changed, why. Append newest at the top. When an amendment supersedes an original plan decision, note the old assumption so future-us doesn't get confused re-reading the earlier sections.
+
+## 2026-04-26 — Phase 3b PR 4: Library + You + FTS5 search
+
+Scoped pass: PLAN §10 Phase 3b PR 4. Plan: `docs/superpowers/plans/2026-04-25-phase3b-mobile-touch-ux.md` §4 (Tasks 4.1–4.9). 9 commits on `main` (no feature branch this round — direct landing pending PR/push by user).
+
+**Shipped (Tasks 4.1–4.9):**
+- `workspace` store: `Tab.lastTouchedAt?: number`. `setActiveTab` + `addTab` stamp `Date.now()` so `ContinueRail` can rank by recency. Missing on legacy rows is the documented null state.
+- `apps/client/src/sync/schema.sql`: appended `cards_fts` virtual table (`tokenize = 'unicode61 remove_diacritics 2'`) + 3 sync triggers (`AFTER INSERT/UPDATE/DELETE ON cards`). Triggers project `prompt + ' ' + response` from the JSON `payload` plus `canvas.name` and `section.name` lookups. Schema is run once via `splitStatements` on cold start.
+- `packages/ui/src/lib/fts.ts` + tests: `rewriteQuery` strips FTS5 special chars, appends `*` for prefix match, returns empty for whitespace. `searchCards(db, query, opts)` runs the bm25-ordered query. `snippetSegments(snippet)` parses `«…»` markers into `{text, hit}[]` so the React layer can render `<mark>` segments via plain text — no raw-HTML escape hatch.
+- Library surfaces under `packages/ui/src/components/mobile/library/`: `ContinueRail` (top-3 tabs by `lastTouchedAt`), `SectionTree` (section/tab navigation mirroring desktop sidebar), `RecentCards` (paginated by 30, breadcrumb + 80-char preview), `SearchSheet` (debounced 150ms FTS5 input, results grouped by section), `Library` (assembly).
+- You surfaces under `packages/ui/src/components/mobile/you/`: `SettingsRow` (label + control row primitive), `DeviceList` (`/api/mobile/sessions` GET + `/api/mobile/revoke` POST), `YouSurface` (Devices, Sync diagnostics, 4 toggles, sign-out).
+- `MobileShell.tsx`: replaces `Library (PR 4)` and `You (PR 4)` placeholders with `<Library />` and `<YouSurface signOut={signOut} />`. `MobileShell` now takes a `signOut: () => Promise<void>` prop. `App.tsx`'s `ResponsiveShell` threads the existing `signOut({ apiBase: apiBaseUrl() })` wrapper through.
+
+**Plan deviations (production-driven):**
+- Plan Task 4.7 had `Database.load('sqlite:scratch.db')`. Real sync DB is `sqlite:sync.db` per `apps/client/src/sync/tauri-sqlite-store.ts`. Fixed.
+- Plan Task 4.3 SQL used named binds (`$sectionId`, `$limit`). Tauri's `@tauri-apps/plugin-sql` uses numbered placeholders (`$1, $2, …`) per the sync store precedent. Rewrote to numbered binds (`[q, sectionId, sectionId, limit]` so the `($2 IS NULL OR cv.section_id = $3)` form keeps working).
+- Plan Task 4.9 imported `signOut` directly from `auth/session` and called bare. Real `signOut()` requires `{apiBase}` (Vite-only resolution lives in `apps/client/src/sync/auth-token.ts`). Made `YouSurface` and `MobileShell` accept `signOut` as a prop so `@1scratch/ui` stays Vite-free — same pattern PR 3 used for `MobileSignIn`'s `signIn` prop.
+- Plan Task 4.9's `DeviceList` used `(globalThis as any).API_BASE_URL`. Used the typed cast pattern from `voice.ts` instead: `(globalThis as unknown as { API_BASE_URL?: string }).API_BASE_URL ?? ''`.
+- Plan Task 4.9's `SyncDiagnostics` was treated as a propless component (default-style import + `<SyncDiagnostics />` no props). Real `SyncDiagnostics` is a named export requiring `{outboxDepth, lastError, triggerNow}`. Wired with placeholders (`0/null/no-op`) so the build stays green; **real wiring needs the `SyncProvider` to expose those values, slated for PR 6**.
+
+**Verification:**
+- Repo tests: `pnpm -r test` — 165 pass total (56 ui — 3 new in `fts.test.ts` / 91 web / 18 sync-engine).
+- `pnpm -w turbo run typecheck` — 5/5 packages green.
+- Pixel device manual smoke (airplane-mode FTS hits + DeviceList revoke): not yet attempted — PR 6 device runbook.
+
+**Deferred to PR 5-6 of Phase 3b:**
+- PR 5: Canvas Stack + Spatial views + `MobileCanvas`.
+- PR 6: Sync resilience + auth gate in `MobileShell` (real `loadSession`/`MobileSignIn` wiring) + `SyncDiagnostics` real wiring (replace YouSurface placeholders with `SyncProvider`-exposed `outboxDepth/lastError/triggerNow`) + Pixel device runbook.
 
 ## 2026-04-26 — Phase 3b PR 3: Quick Capture (composer, voice, camera, clipboard, ImageCard kind)
 
