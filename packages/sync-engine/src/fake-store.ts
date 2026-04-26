@@ -7,6 +7,7 @@ export class FakeStore implements Store {
   canvases = new Map<string, StoredCanvas>()
   sections = new Map<string, StoredSection>()
   outbox: Mutation[] = []
+  outboxFailures = new Map<string, { count: number; lastError: string }>()
   snapshots = new Map<string, Record<string, unknown>>()
   meta = new Map<string, string>()
 
@@ -35,8 +36,13 @@ export class FakeStore implements Store {
   async removeFromOutbox(ids: string[]) {
     const s = new Set(ids)
     this.outbox = this.outbox.filter((m) => !s.has(m.id))
+    for (const id of ids) this.outboxFailures.delete(id)
   }
   async outboxDepth() { return this.outbox.length }
+  async recordOutboxFailure(id: string, error: string) {
+    const prev = this.outboxFailures.get(id)
+    this.outboxFailures.set(id, { count: (prev?.count ?? 0) + 1, lastError: error })
+  }
 
   async getFlushSnapshot(et: string, id: string) {
     return this.snapshots.get(`${et}:${id}`) ?? null

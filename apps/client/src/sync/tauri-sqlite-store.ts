@@ -120,6 +120,12 @@ export class TauriSqliteStore implements Store {
     const rows = await this.db.select<{ n: number }[]>('SELECT count(*) AS n FROM outbox')
     return rows[0]?.n ?? 0
   }
+  async recordOutboxFailure(id: string, error: string) {
+    await this.db.execute(
+      'UPDATE outbox SET retry_count = retry_count + 1, last_error = $1 WHERE id = $2',
+      [error.slice(0, 500), id],
+    )
+  }
 
   async getFlushSnapshot(et: string, id: string) {
     const rows = await this.db.select<{ snapshot: string }[]>(

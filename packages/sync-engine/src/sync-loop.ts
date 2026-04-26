@@ -9,6 +9,7 @@ export interface SyncLoopOptions {
   ownDeviceWorkspaceId: () => string
   pollIntervalMs: number
   onError?: (e: Error) => void
+  onConflicts?: (entityType: string, entityIds: string[]) => void
 }
 
 const MAX_BACKOFF_MS = 60_000
@@ -66,10 +67,24 @@ export class SyncLoop {
         mutations,
       })
       await this.opts.store.removeFromOutbox(res.accepted)
+      if (res.rejected.length > 0) {
+        const byId = new Map(mutations.map((m) => [m.id, m]))
+        const conflictsByType: Record<string, string[]> = {}
+        for (const r of res.rejected) {
+          await this.opts.store.recordOutboxFailure(r.id, r.reason)
+          if (r.reason === 'stale') {
+            const m = byId.get(r.id)
+            if (m) (conflictsByType[m.entityType] ??= []).push(m.entityId)
+          }
+        }
+        for (const [et, ids] of Object.entries(conflictsByType)) this.opts.onConflicts?.(et, ids)
+      }
       if (res.additional.length > 0) await this.reconciler.apply(res.additional)
       await this.opts.store.setMeta('lastServerVersion', res.serverVersion)
       this.backoffMs = 0
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      for (const m of mutations) await this.opts.store.recordOutboxFailure(m.id, msg)
       this.bumpBackoff()
       this.opts.onError?.(e instanceof Error ? e : new Error(String(e)))
       throw e

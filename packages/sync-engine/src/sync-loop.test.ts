@@ -67,4 +67,41 @@ describe('SyncLoop', () => {
     await loop.triggerNow().catch(() => {})
     expect(loop.backoffMs).toBe(2000)
   })
+
+  it('persists retry_count on transport failure', async () => {
+    const store = new FakeStore()
+    await store.enqueue({ id: 'a', entityType: 'card', entityId: 'x', op: 'upsert', patch: {}, clientVersion: '1' })
+    await store.enqueue({ id: 'b', entityType: 'card', entityId: 'y', op: 'upsert', patch: {}, clientVersion: '2' })
+    const pushSpy = vi.fn(() => Promise.reject(new Error('boom')))
+    const loop = new SyncLoop({
+      store, http: makeHttp({ push: pushSpy }), deviceId: 'd',
+      ownDeviceWorkspaceId: () => 'w', pollIntervalMs: 60_000,
+    })
+    await loop.triggerNow().catch(() => {})
+    expect(store.outboxFailures.get('a')).toEqual({ count: 1, lastError: 'boom' })
+    expect(store.outboxFailures.get('b')).toEqual({ count: 1, lastError: 'boom' })
+    await loop.triggerNow().catch(() => {})
+    expect(store.outboxFailures.get('a')?.count).toBe(2)
+  })
+
+  it('emits onConflicts for stale rejections + persists per-id failure', async () => {
+    const store = new FakeStore()
+    await store.enqueue({ id: 'a', entityType: 'card', entityId: 'card-1', op: 'upsert', patch: {}, clientVersion: '1' })
+    await store.enqueue({ id: 'b', entityType: 'card', entityId: 'card-2', op: 'upsert', patch: {}, clientVersion: '2' })
+    const pushSpy = vi.fn(async () => ({
+      accepted: ['b'],
+      rejected: [{ id: 'a', reason: 'stale' as const }],
+      serverVersion: '5', additional: [],
+    }))
+    const conflictsSpy = vi.fn()
+    const loop = new SyncLoop({
+      store, http: makeHttp({ push: pushSpy }), deviceId: 'd',
+      ownDeviceWorkspaceId: () => 'w', pollIntervalMs: 60_000,
+      onConflicts: conflictsSpy,
+    })
+    await loop.triggerNow()
+    expect(conflictsSpy).toHaveBeenCalledWith('card', ['card-1'])
+    expect(store.outboxFailures.get('a')).toEqual({ count: 1, lastError: 'stale' })
+    expect(store.outbox.map((m) => m.id)).toEqual(['a'])
+  })
 })

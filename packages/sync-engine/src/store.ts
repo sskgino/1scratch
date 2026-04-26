@@ -55,6 +55,7 @@ export interface Store {
   peekOutbox(limit: number): Promise<Mutation[]>
   removeFromOutbox(ids: string[]): Promise<void>
   outboxDepth(): Promise<number>
+  recordOutboxFailure(id: string, error: string): Promise<void>
 
   getFlushSnapshot(entityType: string, entityId: string): Promise<Record<string, unknown> | null>
   setFlushSnapshot(entityType: string, entityId: string, snapshot: Record<string, unknown>): Promise<void>
