@@ -34,12 +34,12 @@ function Shell() {
   )
 }
 
-function ResponsiveShell() {
+function ResponsiveShell({ signOut: doSignOut }: { signOut: () => Promise<void> }) {
   const { isMobile } = useViewport()
   return (
     <>
       <div hidden={isMobile} style={{ height: '100%' }}><Shell /></div>
-      <div hidden={!isMobile} style={{ height: '100%' }}><MobileShell /></div>
+      <div hidden={!isMobile} style={{ height: '100%' }}><MobileShell signOut={doSignOut} /></div>
     </>
   )
 }
@@ -148,7 +148,14 @@ export default function App() {
         Sign out
       </button>
       <SyncProvider workspaceId={PLACEHOLDER_WORKSPACE_ID}>
-        <ResponsiveShell />
+        <ResponsiveShell signOut={async () => {
+          try {
+            await signOut({ apiBase: apiBaseUrl() })
+          } finally {
+            clearAuthCache()
+            setSignedIn(false)
+          }
+        }} />
       </SyncProvider>
     </>
   )

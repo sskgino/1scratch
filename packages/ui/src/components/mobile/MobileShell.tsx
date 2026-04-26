@@ -2,8 +2,14 @@ import { useMobileNav } from '../../store/mobileNav'
 import { BottomTabBar } from './BottomTabBar'
 import { SafeArea } from './shared/SafeArea'
 import { QuickCapture } from './capture/QuickCapture'
+import { Library } from './library/Library'
+import { YouSurface } from './you/YouSurface'
 
-export function MobileShell() {
+export interface MobileShellProps {
+  signOut: () => Promise<void>
+}
+
+export function MobileShell({ signOut }: MobileShellProps) {
   const tab = useMobileNav((s) => s.tab)
   return (
     <div data-mobile-shell style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -13,8 +19,8 @@ export function MobileShell() {
       <main style={{ flex: 1, overflow: 'hidden' }}>
         {tab === 'capture' && <QuickCapture />}
         {tab === 'canvas'  && <h1 style={{ padding: 16 }}>Canvas (PR 5)</h1>}
-        {tab === 'library' && <h1 style={{ padding: 16 }}>Library (PR 4)</h1>}
-        {tab === 'you'     && <h1 style={{ padding: 16 }}>You (PR 4)</h1>}
+        {tab === 'library' && <Library />}
+        {tab === 'you'     && <YouSurface signOut={signOut} />}
       </main>
       <BottomTabBar />
     </div>
