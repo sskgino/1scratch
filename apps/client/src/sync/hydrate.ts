@@ -1,6 +1,6 @@
 // One-shot on app boot: read local SQLite into Zustand.
 import type { TauriSqliteStore } from './tauri-sqlite-store'
-import { useCardsStore, type Card as UiCard } from '@1scratch/ui/store/cards'
+import { useCardsStore, type Card as UiCard, type PromptCard, type ImageCard } from '@1scratch/ui/store/cards'
 import { useWorkspaceStore, type Section, type Tab } from '@1scratch/ui/store/workspace'
 
 export async function hydrateFromStore(store: TauriSqliteStore, workspaceId: string): Promise<void> {
@@ -34,24 +34,47 @@ export async function hydrateFromStore(store: TauriSqliteStore, workspaceId: str
   })
 
   const cardMap: Record<string, UiCard> = {}
+  const now = Date.now()
   for (const c of cards) {
     const p = c.payload as {
-      prompt?: string; modelSlot?: string; status?: UiCard['status']; response?: string;
+      kind?: 'prompt' | 'image'
+      prompt?: string; modelSlot?: string; status?: PromptCard['status']; response?: string;
       model?: string; inputTokens?: number; outputTokens?: number; errorMessage?: string
+      fullPath?: string; thumbPath?: string; capturedAt?: number; originDeviceId?: string; caption?: string
     }
-    cardMap[c.id] = {
+    const base = {
       id: c.id,
-      type: 'card',
+      type: 'card' as const,
+      canvasId: c.canvasId,
       x: c.x, y: c.y, width: c.width, height: c.height, zIndex: c.zIndex,
-      createdAt: Date.now(),
-      prompt: p.prompt ?? '',
-      modelSlot: p.modelSlot ?? '0',
-      status: p.status ?? 'idle',
-      response: p.response ?? '',
-      model: p.model ?? '',
-      inputTokens: p.inputTokens,
-      outputTokens: p.outputTokens,
-      errorMessage: p.errorMessage,
+      createdAt: now,
+      updatedAt: now,
+    }
+    if (p.kind === 'image') {
+      const img: ImageCard = {
+        ...base,
+        kind: 'image',
+        fullPath: p.fullPath,
+        thumbPath: p.thumbPath,
+        capturedAt: p.capturedAt ?? now,
+        originDeviceId: p.originDeviceId ?? 'unknown',
+        caption: p.caption,
+      }
+      cardMap[c.id] = img
+    } else {
+      const prompt: PromptCard = {
+        ...base,
+        kind: 'prompt',
+        prompt: p.prompt ?? '',
+        modelSlot: p.modelSlot ?? '0',
+        status: p.status ?? 'idle',
+        response: p.response ?? '',
+        model: p.model ?? '',
+        inputTokens: p.inputTokens,
+        outputTokens: p.outputTokens,
+        errorMessage: p.errorMessage,
+      }
+      cardMap[c.id] = prompt
     }
   }
   useCardsStore.getState().loadCards(cardMap)

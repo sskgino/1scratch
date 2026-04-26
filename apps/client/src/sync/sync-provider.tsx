@@ -63,14 +63,29 @@ export function SyncProvider({ children, workspaceId }: { children: React.ReactN
           if (et === 'card') {
             const c = useCardsStore.getState().cards[id]
             if (!c) return null
-            return {
-              canvasId: (c as unknown as { canvasId?: string }).canvasId ?? '',
+            const base = {
+              canvasId: c.canvasId,
               x: c.x, y: c.y, width: c.width, height: c.height, zIndex: c.zIndex,
+            }
+            if (c.kind === 'prompt') {
+              return {
+                ...base,
+                payload: {
+                  kind: 'prompt' as const,
+                  prompt: c.prompt, modelSlot: c.modelSlot, status: c.status,
+                  response: c.response, model: c.model,
+                  inputTokens: c.inputTokens, outputTokens: c.outputTokens,
+                  errorMessage: c.errorMessage,
+                },
+              }
+            }
+            return {
+              ...base,
               payload: {
-                prompt: c.prompt, modelSlot: c.modelSlot, status: c.status,
-                response: c.response, model: c.model,
-                inputTokens: c.inputTokens, outputTokens: c.outputTokens,
-                errorMessage: c.errorMessage,
+                kind: 'image' as const,
+                fullPath: c.fullPath, thumbPath: c.thumbPath,
+                capturedAt: c.capturedAt, originDeviceId: c.originDeviceId,
+                caption: c.caption,
               },
             }
           }

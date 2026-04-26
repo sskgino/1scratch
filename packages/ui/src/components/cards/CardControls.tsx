@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { useSettingsStore, FONTS } from '../../store/settings'
 import { useCardsStore } from '../../store/cards'
-import type { Card } from '../../store/cards'
+import type { PromptCard } from '../../store/cards'
 
 interface Props {
-  card: Card
+  card: PromptCard
 }
 
 export default function CardControls({ card }: Props) {

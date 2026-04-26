@@ -6,12 +6,12 @@ import CardControls from './CardControls'
 import { useCardsStore } from '../../store/cards'
 import { useSettingsStore } from '../../store/settings'
 import { runPrompt, cancelPrompt } from '../../lib/runPrompt'
-import type { Card } from '../../store/cards'
+import type { PromptCard } from '../../store/cards'
 
 const PAD = 5
 
 interface Props {
-  card: Card
+  card: PromptCard
 }
 
 export default function NoteCard({ card }: Props) {

@@ -10,6 +10,7 @@ export async function runPrompt(cardId: string) {
 
   const card = cards[cardId]
   if (!card) return
+  if (card.kind !== 'prompt') return
   if (!card.prompt.trim()) return
   if (card.status === 'streaming') return
 
@@ -42,7 +43,7 @@ export async function runPrompt(cardId: string) {
     apiKey,
     (chunk) => {
       const current = useCardsStore.getState().cards[cardId]
-      if (current) {
+      if (current && current.kind === 'prompt') {
         useCardsStore.getState().updateCard(cardId, { response: current.response + chunk })
       }
     },
